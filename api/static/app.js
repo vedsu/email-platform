@@ -401,11 +401,31 @@ async function addSuppression() {
     loadSuppressions();
 }
 
-async function bulkSuppressUpload() {
-    const text = document.getElementById('sup-bulk-emails').value.trim();
-    if (!text) return toast('Paste emails first', 'error');
-    const emails = text.split('\n').map(e => e.trim()).filter(e => e);
+async function bulkSuppressCSV() {
+    const file = document.getElementById('sup-bulk-file').files[0];
+    if (!file) return toast('Select a CSV file first', 'error');
+
+    const text = await file.text();
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length < 2) return toast('CSV is empty', 'error');
+
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''));
+    const emailCol = header.indexOf('email');
+    if (emailCol === -1) return toast('CSV must have an "email" column', 'error');
+
+    const emails = [];
+    for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim().replace(/"/g, ''));
+        const email = cols[emailCol];
+        if (email && email.includes('@')) emails.push(email.toLowerCase());
+    }
+
+    if (emails.length === 0) return toast('No valid emails found in CSV', 'error');
+
     const reason = document.getElementById('sup-bulk-reason').value;
+    const resultEl = document.getElementById('sup-bulk-result');
+    resultEl.innerHTML = `<span class="loading"></span> Processing ${emails.length} emails...`;
+
     let added = 0, skipped = 0;
     for (const email of emails) {
         try {
@@ -413,8 +433,9 @@ async function bulkSuppressUpload() {
             added++;
         } catch { skipped++; }
     }
-    toast(`Suppressed: ${added}, Skipped: ${skipped}`);
-    closeModal('sup-bulk-modal');
+
+    resultEl.innerHTML = `<div class="import-success"><span class="badge suppressed">Suppressed: ${added}</span> <span class="badge cold">Already suppressed: ${skipped}</span></div>`;
+    toast(`${added} emails suppressed from CSV`);
     loadSuppressions();
 }
 

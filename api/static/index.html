@@ -304,10 +304,12 @@
         <div class="btn-row"><button class="btn btn-primary" onclick="createUser()">Create</button><button class="btn btn-secondary" onclick="closeModal('user-modal')">Cancel</button></div>
     </div></div>
 
-    <div class="modal-overlay" id="sup-bulk-modal"><div class="modal"><h2>Bulk Suppress Emails</h2>
-        <div class="form-group"><label>Paste emails (one per line)</label><textarea id="sup-bulk-emails" rows="6" placeholder="bad@example.com&#10;bounce@test.com&#10;spam@domain.com"></textarea></div>
+    <div class="modal-overlay" id="sup-bulk-modal"><div class="modal"><h2>Bulk Suppress — CSV Upload</h2>
+        <p class="text-muted mb-2">Upload a CSV with an <strong>email</strong> column. All emails will be suppressed.</p>
+        <div class="form-group"><label>CSV File</label><input type="file" id="sup-bulk-file" accept=".csv"></div>
         <div class="form-group"><label>Reason</label><select id="sup-bulk-reason"><option value="manual">Manual</option><option value="hard_bounce">Hard Bounce</option><option value="complaint">Complaint</option><option value="unsubscribe">Unsubscribe</option></select></div>
-        <div class="btn-row"><button class="btn btn-danger" onclick="bulkSuppressUpload()">Suppress All</button><button class="btn btn-secondary" onclick="closeModal('sup-bulk-modal')">Cancel</button></div>
+        <div class="btn-row"><button class="btn btn-danger" onclick="bulkSuppressCSV()">Suppress All</button><button class="btn btn-secondary" onclick="closeModal('sup-bulk-modal')">Cancel</button></div>
+        <div id="sup-bulk-result" class="mt-2"></div>
     </div></div>
 
     <script src="/static/app.js"></script>
