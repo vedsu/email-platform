@@ -9,6 +9,7 @@ from core.warmup import check_warmup_quota, increment_send_count
 from core.routing import route_from_address
 from core.render import render_template
 from core.postal_client import send_message
+from core.rate_limiter import check_domain_rate_limit, increment_domain_count
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,12 @@ def send_to_recipient(self, campaign_id: str, contact_id: str):
         logger.info(f"Warmup cap reached for stream '{stream}', requeueing {email}")
         raise self.retry(exc=Exception(f"Warmup cap reached for {stream}"))
 
-    # 3. Stream routing
+    # 3. Domain rate limit check
+    if not check_domain_rate_limit(email):
+        logger.info(f"Domain rate limit reached for {email}, requeueing")
+        raise self.retry(exc=Exception(f"Domain rate limit reached for {email.split('@')[1]}"))
+
+    # 4. Stream routing
     from_addr = route_from_address(campaign["from_email"], stream)
 
     # 4. Render template
@@ -93,8 +99,9 @@ def send_to_recipient(self, campaign_id: str, contact_id: str):
         logger.error(f"Postal send failed for {email}: {exc}")
         raise self.retry(exc=exc)
 
-    # 6. Increment warmup counter
+    # 6. Increment counters
     increment_send_count(stream)
+    increment_domain_count(email)
 
     # 7. Record sent event
     now = datetime.utcnow()

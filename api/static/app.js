@@ -171,20 +171,23 @@ async function loadContacts() {
     let url = `/contacts?limit=${CONTACTS_PER_PAGE}&skip=${contactsPage * CONTACTS_PER_PAGE}`;
     if (stream) url += '&stream=' + stream;
     if (status) url += '&status=' + status;
+    if (listId) url += '&list_id=' + listId;
+    if (search) url += '&search=' + encodeURIComponent(search);
 
     const d = await api(url);
     let contacts = d.contacts;
 
-    // Client-side filters
-    if (listId) contacts = contacts.filter(c => c.list_ids?.includes(listId));
-    if (search) contacts = contacts.filter(c => c.email.toLowerCase().includes(search.toLowerCase()));
-
     document.getElementById('contacts-tbody').innerHTML = contacts.map(c => {
         const lists = (c.list_ids || []).map(id => { const l = ALL_LISTS.find(l => l._id === id); return l ? l.name : ''; }).filter(n => n);
+        const tags = (c.tags || []).map(t => `<span class="badge" style="background:#e0e7ff;color:#3730a3;margin-right:2px">${t}</span>`).join('');
+        const score = c.engagement_score || 0;
+        const scoreColor = score >= 50 ? 'green' : score >= 20 ? 'orange' : 'red';
         return `<tr>
             <td>${c.email}</td><td>${c.first_name||''} ${c.last_name||''}</td>
             <td><span class="badge ${c.stream}">${c.stream}</span></td>
             <td><span class="badge ${c.status}">${c.status}</span></td>
+            <td>${tags || '-'}</td>
+            <td><span class="value ${scoreColor}" style="font-size:13px">${score}</span></td>
             <td class="text-muted">${lists.length ? lists.join(', ') : '-'}</td>
             <td>${c.engagement?.total_sent||0}</td><td>${c.engagement?.total_opened||0}</td><td>${c.engagement?.total_clicked||0}</td>
         </tr>`;

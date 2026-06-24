@@ -54,6 +54,9 @@ async def import_contacts(payload: ContactImport):
 async def list_contacts(
     stream: Optional[StreamType] = None,
     status: Optional[ContactStatus] = None,
+    tag: Optional[str] = None,
+    search: Optional[str] = None,
+    list_id: Optional[str] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
 ):
@@ -63,6 +66,12 @@ async def list_contacts(
         query["stream"] = stream.value
     if status:
         query["status"] = status.value
+    if tag:
+        query["tags"] = tag
+    if list_id:
+        query["list_ids"] = list_id
+    if search:
+        query["email"] = {"$regex": search, "$options": "i"}
 
     cursor = db.contacts.find(query).skip(skip).limit(limit).sort("created_at", -1)
     contacts = []
@@ -101,3 +110,34 @@ async def delete_contact(email: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Contact not found")
     return {"deleted": True}
+
+
+@router.post("/{email}/tags")
+async def add_tags(email: str, tags: list[str]):
+    db = get_db()
+    result = await db.contacts.update_one(
+        {"email": email},
+        {"$addToSet": {"tags": {"$each": tags}}, "$set": {"updated_at": datetime.utcnow()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return {"added": tags}
+
+
+@router.delete("/{email}/tags/{tag}")
+async def remove_tag(email: str, tag: str):
+    db = get_db()
+    result = await db.contacts.update_one(
+        {"email": email},
+        {"$pull": {"tags": tag}, "$set": {"updated_at": datetime.utcnow()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return {"removed": tag}
+
+
+@router.get("/tags/all")
+async def list_all_tags():
+    db = get_db()
+    tags = await db.contacts.distinct("tags")
+    return {"tags": sorted(tags)}

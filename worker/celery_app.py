@@ -27,4 +27,8 @@ celery.conf.beat_schedule = {
         "task": "check_scheduled_campaigns",
         "schedule": 60.0,
     },
+    "recalculate-engagement-scores": {
+        "task": "recalculate_engagement_scores",
+        "schedule": 3600.0,
+    },
 }

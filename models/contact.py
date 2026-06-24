@@ -42,6 +42,8 @@ class Contact(BaseModel):
     stream: StreamType = StreamType.COLD
     status: ContactStatus = ContactStatus.ACTIVE
     source: ContactSource = ContactSource.IMPORT
+    tags: list[str] = Field(default_factory=list)
+    engagement_score: float = 0.0
     list_ids: list[str] = Field(default_factory=list)
     engagement: EngagementStats = Field(default_factory=EngagementStats)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -53,4 +55,6 @@ CONTACT_INDEXES = [
     {"keys": [("status", 1), ("stream", 1)]},
     {"keys": [("list_ids", 1)]},
     {"keys": [("stream", 1), ("engagement.last_opened_at", -1)]},
+    {"keys": [("tags", 1)]},
+    {"keys": [("engagement_score", -1)]},
 ]
