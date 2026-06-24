@@ -7,7 +7,7 @@ from bson import ObjectId
 from models.database import get_db
 from models.contact import StreamType, ContactStatus
 from models.campaign import CampaignStatus
-from core.auth import get_current_user
+from core.auth import get_current_user, require_admin
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -101,6 +101,8 @@ async def list_campaigns(
         query["status"] = status.value
     if stream:
         query["stream"] = stream.value
+    if user.get("role") != "admin":
+        query["archived"] = {"$ne": True}
 
     cursor = db.campaigns.find(query).skip(skip).limit(limit).sort("created_at", -1)
     campaigns = []
@@ -241,8 +243,26 @@ async def resume_campaign(campaign_id: str, user: dict = Depends(get_current_use
     return {"campaign_id": campaign_id, "status": "sending", "enqueued": enqueued}
 
 
+@router.post("/{campaign_id}/archive")
+async def archive_campaign(campaign_id: str, user: dict = Depends(get_current_user)):
+    """Member soft-delete: hides from member view but stays visible to admin."""
+    db = get_db()
+    campaign = await db.campaigns.find_one({"_id": ObjectId(campaign_id)})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign["status"] == CampaignStatus.SENDING.value:
+        raise HTTPException(status_code=400, detail="Cannot archive a sending campaign. Pause it first.")
+
+    await db.campaigns.update_one(
+        {"_id": ObjectId(campaign_id)},
+        {"$set": {"archived": True, "archived_by": user["sub"], "updated_at": datetime.utcnow()}},
+    )
+    return {"campaign_id": campaign_id, "archived": True}
+
+
 @router.delete("/{campaign_id}")
-async def delete_campaign(campaign_id: str, user: dict = Depends(get_current_user)):
+async def delete_campaign(campaign_id: str, admin: dict = Depends(require_admin)):
+    """Admin permanent delete: removes campaign and its events."""
     db = get_db()
     campaign = await db.campaigns.find_one({"_id": ObjectId(campaign_id)})
     if not campaign:
@@ -250,5 +270,6 @@ async def delete_campaign(campaign_id: str, user: dict = Depends(get_current_use
     if campaign["status"] == CampaignStatus.SENDING.value:
         raise HTTPException(status_code=400, detail="Cannot delete a sending campaign. Pause it first.")
 
+    await db.events.delete_many({"campaign_id": campaign_id})
     await db.campaigns.delete_one({"_id": ObjectId(campaign_id)})
-    return {"deleted": True}
+    return {"deleted": True, "events_deleted": True}

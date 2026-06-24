@@ -26,13 +26,110 @@ class IPAddressCreate(BaseModel):
     daily_cap: int = 100
 
 
-class IPAssign(BaseModel):
-    domain_id: Optional[str] = None
-    pool_id: Optional[str] = None
-    stream: Optional[str] = None
+# --- Static routes FIRST (before /{pool_id}) ---
+
+@router.get("/overview")
+async def ip_overview(admin: dict = Depends(require_admin)):
+    db = get_db()
+    total_ips = await db.ip_addresses.count_documents({})
+    by_status = {}
+    async for doc in db.ip_addresses.aggregate([{"$group": {"_id": "$status", "count": {"$sum": 1}}}]):
+        by_status[doc["_id"]] = doc["count"]
+
+    by_stream = {}
+    async for doc in db.ip_addresses.aggregate([{"$group": {"_id": "$stream", "count": {"$sum": 1}}}]):
+        by_stream[doc["_id"]] = doc["count"]
+
+    total_pools = await db.ip_pools.count_documents({})
+
+    return {
+        "total_ips": total_ips,
+        "total_pools": total_pools,
+        "by_status": by_status,
+        "by_stream": by_stream,
+    }
 
 
-# --- Pools ---
+@router.post("/ips")
+async def add_ip(payload: IPAddressCreate, admin: dict = Depends(require_admin)):
+    db = get_db()
+    doc = {
+        "ip": payload.ip,
+        "hostname": payload.hostname,
+        "ip_type": payload.ip_type,
+        "status": "warming",
+        "stream": payload.stream,
+        "domain_id": payload.domain_id,
+        "pool_id": payload.pool_id,
+        "ptr_record": "",
+        "daily_cap": payload.daily_cap,
+        "today_sent": 0,
+        "created_at": datetime.utcnow(),
+    }
+    try:
+        result = await db.ip_addresses.insert_one(doc)
+    except Exception as e:
+        if "duplicate key" in str(e):
+            raise HTTPException(status_code=409, detail="IP already exists")
+        raise
+
+    if payload.pool_id:
+        await db.ip_pools.update_one(
+            {"_id": ObjectId(payload.pool_id)},
+            {"$addToSet": {"ip_ids": str(result.inserted_id)}},
+        )
+
+    return {"id": str(result.inserted_id), "ip": payload.ip}
+
+
+@router.get("/ips")
+async def list_ips(admin: dict = Depends(require_admin)):
+    db = get_db()
+    ips = []
+    async for doc in db.ip_addresses.find().sort("created_at", -1):
+        doc["_id"] = str(doc["_id"])
+        if doc.get("domain_id"):
+            domain = await db.domains.find_one({"_id": ObjectId(doc["domain_id"])})
+            doc["domain_name"] = domain["full_domain"] if domain else None
+        if doc.get("pool_id"):
+            pool = await db.ip_pools.find_one({"_id": ObjectId(doc["pool_id"])})
+            doc["pool_name"] = pool["name"] if pool else None
+        ips.append(doc)
+    return {"ips": ips}
+
+
+@router.patch("/ips/{ip_id}")
+async def update_ip(ip_id: str, updates: dict, admin: dict = Depends(require_admin)):
+    db = get_db()
+    allowed = {"hostname", "ip_type", "status", "stream", "domain_id", "pool_id", "daily_cap", "ptr_record"}
+    filtered = {k: v for k, v in updates.items() if k in allowed}
+    if not filtered:
+        raise HTTPException(status_code=400, detail="No valid fields")
+
+    result = await db.ip_addresses.update_one({"_id": ObjectId(ip_id)}, {"$set": filtered})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="IP not found")
+    return {"updated": True}
+
+
+@router.delete("/ips/{ip_id}")
+async def delete_ip(ip_id: str, admin: dict = Depends(require_admin)):
+    db = get_db()
+    ip = await db.ip_addresses.find_one({"_id": ObjectId(ip_id)})
+    if not ip:
+        raise HTTPException(status_code=404, detail="IP not found")
+
+    if ip.get("pool_id"):
+        await db.ip_pools.update_one(
+            {"_id": ObjectId(ip["pool_id"])},
+            {"$pull": {"ip_ids": ip_id}},
+        )
+
+    await db.ip_addresses.delete_one({"_id": ObjectId(ip_id)})
+    return {"deleted": True}
+
+
+# --- Pool CRUD (parameterized routes after static) ---
 
 @router.post("")
 async def create_pool(payload: IPPoolCreate, admin: dict = Depends(require_admin)):
@@ -119,106 +216,3 @@ async def delete_pool(pool_id: str, admin: dict = Depends(require_admin)):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Pool not found")
     return {"deleted": True}
-
-
-# --- IP Addresses ---
-
-@router.post("/ips")
-async def add_ip(payload: IPAddressCreate, admin: dict = Depends(require_admin)):
-    db = get_db()
-    doc = {
-        "ip": payload.ip,
-        "hostname": payload.hostname,
-        "ip_type": payload.ip_type,
-        "status": "warming",
-        "stream": payload.stream,
-        "domain_id": payload.domain_id,
-        "pool_id": payload.pool_id,
-        "ptr_record": "",
-        "daily_cap": payload.daily_cap,
-        "today_sent": 0,
-        "created_at": datetime.utcnow(),
-    }
-    try:
-        result = await db.ip_addresses.insert_one(doc)
-    except Exception as e:
-        if "duplicate key" in str(e):
-            raise HTTPException(status_code=409, detail="IP already exists")
-        raise
-
-    if payload.pool_id:
-        await db.ip_pools.update_one(
-            {"_id": ObjectId(payload.pool_id)},
-            {"$addToSet": {"ip_ids": str(result.inserted_id)}},
-        )
-
-    return {"id": str(result.inserted_id), "ip": payload.ip}
-
-
-@router.get("/ips")
-async def list_ips(admin: dict = Depends(require_admin)):
-    db = get_db()
-    ips = []
-    async for doc in db.ip_addresses.find().sort("created_at", -1):
-        doc["_id"] = str(doc["_id"])
-        if doc.get("domain_id"):
-            domain = await db.domains.find_one({"_id": ObjectId(doc["domain_id"])})
-            doc["domain_name"] = domain["full_domain"] if domain else None
-        if doc.get("pool_id"):
-            pool = await db.ip_pools.find_one({"_id": ObjectId(doc["pool_id"])})
-            doc["pool_name"] = pool["name"] if pool else None
-        ips.append(doc)
-    return {"ips": ips}
-
-
-@router.patch("/ips/{ip_id}")
-async def update_ip(ip_id: str, updates: dict, admin: dict = Depends(require_admin)):
-    db = get_db()
-    allowed = {"hostname", "ip_type", "status", "stream", "domain_id", "pool_id", "daily_cap", "ptr_record"}
-    filtered = {k: v for k, v in updates.items() if k in allowed}
-    if not filtered:
-        raise HTTPException(status_code=400, detail="No valid fields")
-
-    result = await db.ip_addresses.update_one({"_id": ObjectId(ip_id)}, {"$set": filtered})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="IP not found")
-    return {"updated": True}
-
-
-@router.delete("/ips/{ip_id}")
-async def delete_ip(ip_id: str, admin: dict = Depends(require_admin)):
-    db = get_db()
-    ip = await db.ip_addresses.find_one({"_id": ObjectId(ip_id)})
-    if not ip:
-        raise HTTPException(status_code=404, detail="IP not found")
-
-    if ip.get("pool_id"):
-        await db.ip_pools.update_one(
-            {"_id": ObjectId(ip["pool_id"])},
-            {"$pull": {"ip_ids": ip_id}},
-        )
-
-    await db.ip_addresses.delete_one({"_id": ObjectId(ip_id)})
-    return {"deleted": True}
-
-
-@router.get("/overview")
-async def ip_overview(admin: dict = Depends(require_admin)):
-    db = get_db()
-    total_ips = await db.ip_addresses.count_documents({})
-    by_status = {}
-    async for doc in db.ip_addresses.aggregate([{"$group": {"_id": "$status", "count": {"$sum": 1}}}]):
-        by_status[doc["_id"]] = doc["count"]
-
-    by_stream = {}
-    async for doc in db.ip_addresses.aggregate([{"$group": {"_id": "$stream", "count": {"$sum": 1}}}]):
-        by_stream[doc["_id"]] = doc["count"]
-
-    total_pools = await db.ip_pools.count_documents({})
-
-    return {
-        "total_ips": total_ips,
-        "total_pools": total_pools,
-        "by_status": by_status,
-        "by_stream": by_stream,
-    }

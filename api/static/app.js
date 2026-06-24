@@ -329,8 +329,13 @@ async function loadCampaigns() {
         else if (c.status === 'sending') actions = `<button class="btn btn-secondary btn-sm" onclick="pauseCampaign('${c._id}')">Pause</button> `;
         else if (c.status === 'paused') actions = `<button class="btn btn-primary btn-sm" onclick="resumeCampaign('${c._id}')">Resume</button> `;
         actions += `<button class="btn btn-secondary btn-sm" onclick="exportCSV('campaign/${c._id}')">CSV</button>`;
+        if (c.status !== 'sending') {
+            if (USER?.role === 'admin') actions += ` <button class="btn btn-danger btn-sm" onclick="deleteCampaign('${c._id}')">Delete</button>`;
+            else actions += ` <button class="btn btn-secondary btn-sm" onclick="archiveCampaign('${c._id}')">Archive</button>`;
+        }
         const tplName = c.template_id ? ' (from template)' : '';
-        return `<tr><td>${c.name}<span class="text-muted">${tplName}</span></td><td><span class="badge ${c.stream}">${c.stream}</span></td><td><span class="badge ${c.status}">${c.status}</span></td><td>${s.sent||0}/${s.total_recipients||0}</td><td>${s.opened||0}</td><td>${s.bounced||0}</td><td>${actions}</td></tr>`;
+        const archived = c.archived ? ' <span class="badge suppressed">archived</span>' : '';
+        return `<tr><td>${c.name}<span class="text-muted">${tplName}</span>${archived}</td><td><span class="badge ${c.stream}">${c.stream}</span></td><td><span class="badge ${c.status}">${c.status}</span></td><td>${s.sent||0}/${s.total_recipients||0}</td><td>${s.opened||0}</td><td>${s.bounced||0}</td><td>${actions}</td></tr>`;
     }).join('');
     ['report-campaign','ai-camp'].forEach(id => {
         const el = document.getElementById(id);
@@ -382,6 +387,8 @@ async function createCampaign() {
     loadCampaigns();
 }
 
+async function archiveCampaign(id) { if (!confirm('Archive this campaign? It will be hidden from your view but admin can still see it.')) return; await api('/campaigns/'+id+'/archive', {method:'POST'}); toast('Campaign archived'); loadCampaigns(); }
+async function deleteCampaign(id) { if (!confirm('Permanently delete this campaign and all its events? This cannot be undone.')) return; await api('/campaigns/'+id, {method:'DELETE'}); toast('Campaign permanently deleted'); loadCampaigns(); }
 async function launchCampaign(id) { if (!confirm('Launch campaign? Emails will be sent.')) return; const d = await api('/campaigns/'+id+'/launch', {method:'POST'}); toast(`Campaign launched! ${d.enqueued} emails enqueued.`); loadCampaigns(); }
 async function pauseCampaign(id) { await api('/campaigns/'+id+'/pause', {method:'POST'}); toast('Campaign paused'); loadCampaigns(); }
 async function resumeCampaign(id) { const d = await api('/campaigns/'+id+'/resume', {method:'POST'}); toast(`Campaign resumed! ${d.enqueued} enqueued.`); loadCampaigns(); }
