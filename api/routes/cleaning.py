@@ -1,5 +1,7 @@
+import csv
+import io
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
 from models.database import get_db
@@ -63,6 +65,31 @@ async def clean_list(list_id: str, suppress_invalid: bool = False):
 
     if not emails:
         return {"summary": {"total": 0}, "details": {}}
+
+    payload = CleanRequest(emails=emails, suppress_invalid=suppress_invalid)
+    return await bulk_clean(payload)
+
+
+@router.post("/bulk-csv")
+async def bulk_clean_csv(
+    file: UploadFile = File(...),
+    suppress_invalid: bool = Form(False),
+):
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+
+    content = await file.read()
+    text = content.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+
+    emails = []
+    for row in reader:
+        email = row.get("email", "").strip().lower()
+        if email and "@" in email:
+            emails.append(email)
+
+    if not emails:
+        raise HTTPException(status_code=400, detail="No valid emails found in CSV")
 
     payload = CleanRequest(emails=emails, suppress_invalid=suppress_invalid)
     return await bulk_clean(payload)

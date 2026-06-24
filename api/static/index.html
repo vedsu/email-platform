@@ -227,7 +227,12 @@
             <div id="page-cleaning" class="page">
                 <h2 class="mb-2">Email Cleaning</h2>
                 <div class="card"><h2>Verify Email</h2><div style="display:flex;gap:8px"><input id="verify-email" placeholder="email@example.com" style="flex:1;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:13px"><button class="btn btn-primary" onclick="verifyEmail()">Verify</button></div><div id="verify-result" class="mt-2"></div></div>
-                <div class="card"><h2>Bulk Clean</h2><div class="form-group"><textarea id="bulk-emails" placeholder="Paste emails, one per line..." rows="5"></textarea></div><button class="btn btn-primary" onclick="bulkClean()">Clean</button><div id="bulk-result" class="mt-2"></div></div>
+                <div class="card"><h2>Bulk Clean</h2>
+                    <div class="tabs"><div class="tab active" onclick="switchCleanTab('paste',this)">Paste Emails</div><div class="tab" onclick="switchCleanTab('csv',this)">CSV Upload</div></div>
+                    <div id="clean-paste-tab"><div class="form-group"><textarea id="bulk-emails" placeholder="Paste emails, one per line..." rows="5"></textarea></div><button class="btn btn-primary" onclick="bulkClean()">Clean</button></div>
+                    <div id="clean-csv-tab" class="hidden"><div class="form-group"><label>CSV file with email column</label><input type="file" id="clean-csv-file" accept=".csv"></div><button class="btn btn-primary" onclick="bulkCleanCSV()">Clean CSV</button></div>
+                    <div id="bulk-result" class="mt-2"></div>
+                </div>
             </div>
 
             <!-- AI -->

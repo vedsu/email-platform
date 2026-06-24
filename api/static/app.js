@@ -415,37 +415,23 @@ async function bulkSuppressCSV() {
     const file = document.getElementById('sup-bulk-file').files[0];
     if (!file) return toast('Select a CSV file first', 'error');
 
-    const text = await file.text();
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-    if (lines.length < 2) return toast('CSV is empty', 'error');
-
-    const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''));
-    const emailCol = header.indexOf('email');
-    if (emailCol === -1) return toast('CSV must have an "email" column', 'error');
-
-    const emails = [];
-    for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.trim().replace(/"/g, ''));
-        const email = cols[emailCol];
-        if (email && email.includes('@')) emails.push(email.toLowerCase());
-    }
-
-    if (emails.length === 0) return toast('No valid emails found in CSV', 'error');
-
     const reason = document.getElementById('sup-bulk-reason').value;
     const resultEl = document.getElementById('sup-bulk-result');
-    resultEl.innerHTML = `<span class="loading"></span> Processing ${emails.length} emails...`;
+    resultEl.innerHTML = `<span class="loading"></span> Uploading...`;
 
-    let added = 0, skipped = 0;
-    for (const email of emails) {
-        try {
-            await api('/suppressions', {method:'POST', body:JSON.stringify({email, reason})});
-            added++;
-        } catch { skipped++; }
-    }
+    const form = new FormData();
+    form.append('file', file);
+    form.append('reason', reason);
 
-    resultEl.innerHTML = `<div class="import-success"><span class="badge suppressed">Suppressed: ${added}</span> <span class="badge cold">Already suppressed: ${skipped}</span></div>`;
-    toast(`${added} emails suppressed from CSV`);
+    const res = await fetch('/suppressions/bulk-csv', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + TOKEN },
+        body: form,
+    });
+    const data = await res.json();
+
+    resultEl.innerHTML = `<div class="import-success"><span class="badge suppressed">Suppressed: ${data.added}</span> <span class="badge cold">Already suppressed: ${data.skipped}</span></div>`;
+    toast(`${data.added} emails suppressed from CSV`);
     loadSuppressions();
 }
 
@@ -510,6 +496,31 @@ async function bulkClean() {
     const d = await api('/cleaning/bulk', {method:'POST', body:JSON.stringify({emails})});
     const s = d.summary;
     document.getElementById('bulk-result').innerHTML = `<div class="stats-grid mt-2"><div class="stat-card"><div class="label">Valid</div><div class="value green">${s.valid}</div></div><div class="stat-card"><div class="label">Invalid</div><div class="value red">${s.invalid_syntax}</div></div><div class="stat-card"><div class="label">No MX</div><div class="value red">${s.no_mx}</div></div><div class="stat-card"><div class="label">Disposable</div><div class="value orange">${s.disposable}</div></div><div class="stat-card"><div class="label">Role</div><div class="value orange">${s.role}</div></div></div>`;
+}
+
+function switchCleanTab(tab, el) {
+    document.querySelectorAll('#page-cleaning .tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('clean-paste-tab').classList.toggle('hidden', tab !== 'paste');
+    document.getElementById('clean-csv-tab').classList.toggle('hidden', tab !== 'csv');
+}
+
+async function bulkCleanCSV() {
+    const file = document.getElementById('clean-csv-file').files[0];
+    if (!file) return toast('Select a CSV file first', 'error');
+
+    const form = new FormData();
+    form.append('file', file);
+
+    const res = await fetch('/cleaning/bulk-csv', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + TOKEN },
+        body: form,
+    });
+    const d = await res.json();
+    const s = d.summary;
+    document.getElementById('bulk-result').innerHTML = `<div class="stats-grid mt-2"><div class="stat-card"><div class="label">Valid</div><div class="value green">${s.valid}</div></div><div class="stat-card"><div class="label">Invalid</div><div class="value red">${s.invalid_syntax}</div></div><div class="stat-card"><div class="label">No MX</div><div class="value red">${s.no_mx}</div></div><div class="stat-card"><div class="label">Disposable</div><div class="value orange">${s.disposable}</div></div><div class="stat-card"><div class="label">Role</div><div class="value orange">${s.role}</div></div><div class="stat-card"><div class="label">Duplicate</div><div class="value">${s.duplicate}</div></div></div>`;
+    toast(`Cleaned ${Object.values(s).reduce((a,b)=>a+b,0)} emails from CSV`);
 }
 
 // --- AI ---

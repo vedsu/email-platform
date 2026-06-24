@@ -1,5 +1,8 @@
+import csv
+import io
+from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from pydantic import BaseModel, EmailStr
 
 from models.database import get_db
@@ -11,6 +14,12 @@ router = APIRouter(prefix="/suppressions", tags=["suppressions"])
 class SuppressionCreate(BaseModel):
     email: EmailStr
     reason: SuppressionReason
+    source: Optional[str] = None
+
+
+class BulkSuppressionCreate(BaseModel):
+    emails: list[str]
+    reason: SuppressionReason = SuppressionReason.MANUAL
     source: Optional[str] = None
 
 
@@ -74,3 +83,69 @@ async def remove_suppression(email: str):
     )
 
     return {"removed": email}
+
+
+@router.post("/bulk")
+async def bulk_suppress(payload: BulkSuppressionCreate):
+    db = get_db()
+    added = 0
+    skipped = 0
+    now = datetime.utcnow()
+
+    for email in payload.emails:
+        email = email.strip().lower()
+        if not email or "@" not in email:
+            continue
+        try:
+            await db.suppressions.insert_one({
+                "email": email,
+                "reason": payload.reason.value,
+                "source": payload.source or "bulk_upload",
+                "campaign_id": None,
+                "created_at": now,
+            })
+            await db.contacts.update_one({"email": email}, {"$set": {"status": "suppressed"}})
+            added += 1
+        except Exception as e:
+            if "duplicate key" in str(e):
+                skipped += 1
+
+    return {"added": added, "skipped": skipped, "total": len(payload.emails)}
+
+
+@router.post("/bulk-csv")
+async def bulk_suppress_csv(
+    file: UploadFile = File(...),
+    reason: str = Form("manual"),
+):
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+
+    content = await file.read()
+    text = content.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+
+    db = get_db()
+    added = 0
+    skipped = 0
+    now = datetime.utcnow()
+
+    for row in reader:
+        email = row.get("email", "").strip().lower()
+        if not email or "@" not in email:
+            continue
+        try:
+            await db.suppressions.insert_one({
+                "email": email,
+                "reason": reason,
+                "source": "csv_upload",
+                "campaign_id": None,
+                "created_at": now,
+            })
+            await db.contacts.update_one({"email": email}, {"$set": {"status": "suppressed"}})
+            added += 1
+        except Exception as e:
+            if "duplicate key" in str(e):
+                skipped += 1
+
+    return {"added": added, "skipped": skipped}
