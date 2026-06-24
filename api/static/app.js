@@ -4,11 +4,16 @@ let ALL_LISTS = [];
 
 // --- API ---
 async function api(path, opts = {}) {
-    const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+    const headers = { ...(opts.headers || {}) };
+    if (!opts.body || typeof opts.body === 'string') headers['Content-Type'] = 'application/json';
     if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
     delete opts.headers;
     const res = await fetch(path, { headers, ...opts });
-    if (res.status === 401) { doLogout(); throw new Error('Unauthorized'); }
+    if (res.status === 401) {
+        // Only logout if this was an auth-required endpoint, not login itself
+        if (!path.includes('/auth/login')) { doLogout(); }
+        throw new Error('Unauthorized');
+    }
     if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || res.statusText);
@@ -31,12 +36,17 @@ function toast(msg, type = 'success') {
 async function doLogin() {
     const email = document.getElementById('login-email').value;
     const password = document.getElementById('login-password').value;
+    // Clear any stale state before attempting login
+    TOKEN = null;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     try {
         const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
         TOKEN = data.access_token;
         USER = data.user;
         localStorage.setItem('token', TOKEN);
         localStorage.setItem('user', JSON.stringify(USER));
+        document.getElementById('login-error').textContent = '';
         showApp();
     } catch (e) { document.getElementById('login-error').textContent = e.message; }
 }
@@ -48,14 +58,14 @@ function doLogout() {
     document.getElementById('login-page').style.display = 'flex';
 }
 
-function showApp() {
+async function showApp() {
     document.getElementById('login-page').style.display = 'none';
     document.getElementById('app').classList.remove('hidden');
     document.getElementById('sidebar-user').textContent = USER ? `${USER.name} (${USER.role})` : '';
     if (USER?.role === 'admin') document.getElementById('admin-nav').classList.remove('hidden');
     else document.getElementById('admin-nav').classList.add('hidden');
-    loadAllLists();
-    loadDashboard();
+    try { await loadAllLists(); } catch(e) { console.warn('loadAllLists failed:', e); }
+    try { await loadDashboard(); } catch(e) { console.warn('loadDashboard failed:', e); }
 }
 
 // --- Navigation ---
