@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Platform CRM</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+        .layout { display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar { width: 220px; background: #1a1a2e; color: #fff; padding: 20px 0; position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar h1 { font-size: 16px; padding: 0 20px 20px; border-bottom: 1px solid #2d2d4a; margin-bottom: 10px; }
+        .sidebar a { display: block; padding: 10px 20px; color: #8888aa; text-decoration: none; font-size: 14px; transition: all 0.2s; }
+        .sidebar a:hover, .sidebar a.active { color: #fff; background: #2d2d4a; }
+        .sidebar a.active { border-left: 3px solid #4a9eff; }
+        .sidebar .section-label { font-size: 11px; text-transform: uppercase; color: #555577; padding: 15px 20px 5px; letter-spacing: 1px; }
+
+        /* Main */
+        .main { margin-left: 220px; flex: 1; padding: 30px; }
+
+        /* Cards */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .stat-card .label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+        .stat-card .value.green { color: #22c55e; }
+        .stat-card .value.blue { color: #3b82f6; }
+        .stat-card .value.red { color: #ef4444; }
+        .stat-card .value.orange { color: #f59e0b; }
+
+        /* Table */
+        .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .card h2 { font-size: 16px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 8px 12px; border-bottom: 2px solid #e5e7eb; color: #666; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+        td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+        tr:hover td { background: #f8f9fa; }
+
+        /* Badges */
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .badge.active { background: #dcfce7; color: #166534; }
+        .badge.suppressed, .badge.bounced { background: #fee2e2; color: #991b1b; }
+        .badge.unsubscribed { background: #fef3c7; color: #92400e; }
+        .badge.draft { background: #e0e7ff; color: #3730a3; }
+        .badge.sending { background: #dbeafe; color: #1e40af; }
+        .badge.completed { background: #dcfce7; color: #166534; }
+        .badge.paused { background: #fef3c7; color: #92400e; }
+        .badge.optin { background: #dcfce7; color: #166534; }
+        .badge.engaged { background: #dbeafe; color: #1e40af; }
+        .badge.cold { background: #f3f4f6; color: #374151; }
+
+        /* Forms */
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+        .form-group textarea { resize: vertical; min-height: 80px; }
+
+        /* Buttons */
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+        .btn-primary { background: #3b82f6; color: #fff; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: #22c55e; color: #fff; }
+        .btn-success:hover { background: #16a34a; }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-secondary { background: #e5e7eb; color: #374151; }
+        .btn-secondary:hover { background: #d1d5db; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+
+        /* Modals */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; }
+        .modal-overlay.open { display: flex; }
+        .modal { background: #fff; border-radius: 12px; padding: 24px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+        .modal h2 { margin-bottom: 16px; }
+
+        /* Utility */
+        .text-muted { color: #888; font-size: 12px; }
+        .mt-2 { margin-top: 8px; }
+        .mb-2 { margin-bottom: 8px; }
+        .hidden { display: none; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+
+        /* AI response */
+        .ai-response { background: #f8f9fa; border-left: 3px solid #3b82f6; padding: 16px; border-radius: 0 8px 8px 0; margin-top: 12px; white-space: pre-wrap; font-size: 13px; line-height: 1.6; max-height: 400px; overflow-y: auto; }
+
+        .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #ddd; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .page { display: none; }
+        .page.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <nav class="sidebar">
+            <h1>Email Platform</h1>
+            <a href="#" data-page="dashboard" class="active">Dashboard</a>
+            <div class="section-label">Manage</div>
+            <a href="#" data-page="contacts">Contacts</a>
+            <a href="#" data-page="lists">Lists</a>
+            <a href="#" data-page="campaigns">Campaigns</a>
+            <a href="#" data-page="suppressions">Suppressions</a>
+            <div class="section-label">Tools</div>
+            <a href="#" data-page="cleaning">Email Cleaning</a>
+            <a href="#" data-page="ai">AI Assistant</a>
+        </nav>
+
+        <div class="main">
+            <!-- Dashboard -->
+            <div id="page-dashboard" class="page active">
+                <h2 class="mb-2">Dashboard</h2>
+                <div class="stats-grid" id="dashboard-stats"></div>
+                <div class="card">
+                    <h2>Stream Breakdown</h2>
+                    <div id="stream-breakdown"></div>
+                </div>
+            </div>
+
+            <!-- Contacts -->
+            <div id="page-contacts" class="page">
+                <div class="flex-between mb-2">
+                    <h2>Contacts</h2>
+                    <button class="btn btn-primary" onclick="openModal('import-modal')">Import Contacts</button>
+                </div>
+                <div class="card">
+                    <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+                        <select id="contacts-stream-filter" onchange="loadContacts()" style="padding: 6px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px;">
+                            <option value="">All Streams</option>
+                            <option value="optin">Opt-in</option>
+                            <option value="engaged">Engaged</option>
+                            <option value="cold">Cold</option>
+                        </select>
+                        <select id="contacts-status-filter" onchange="loadContacts()" style="padding: 6px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px;">
+                            <option value="">All Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="suppressed">Suppressed</option>
+                            <option value="unsubscribed">Unsubscribed</option>
+                            <option value="bounced">Bounced</option>
+                        </select>
+                    </div>
+                    <table>
+                        <thead><tr><th>Email</th><th>Name</th><th>Stream</th><th>Status</th><th>Sent</th><th>Opened</th></tr></thead>
+                        <tbody id="contacts-table"></tbody>
+                    </table>
+                    <div id="contacts-pagination" class="mt-2 text-muted"></div>
+                </div>
+            </div>
+
+            <!-- Lists -->
+            <div id="page-lists" class="page">
+                <div class="flex-between mb-2">
+                    <h2>Lists</h2>
+                    <button class="btn btn-primary" onclick="openModal('list-modal')">Create List</button>
+                </div>
+                <div class="card">
+                    <table>
+                        <thead><tr><th>Name</th><th>Type</th><th>Contacts</th><th>Created</th></tr></thead>
+                        <tbody id="lists-table"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Campaigns -->
+            <div id="page-campaigns" class="page">
+                <div class="flex-between mb-2">
+                    <h2>Campaigns</h2>
+                    <button class="btn btn-primary" onclick="openModal('campaign-modal')">Create Campaign</button>
+                </div>
+                <div class="card">
+                    <table>
+                        <thead><tr><th>Name</th><th>Stream</th><th>Status</th><th>Sent</th><th>Opened</th><th>Bounced</th><th>Actions</th></tr></thead>
+                        <tbody id="campaigns-table"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Suppressions -->
+            <div id="page-suppressions" class="page">
+                <div class="flex-between mb-2">
+                    <h2>Suppressions</h2>
+                    <button class="btn btn-primary" onclick="openModal('suppression-modal')">Add Suppression</button>
+                </div>
+                <div class="stats-grid" id="suppression-stats"></div>
+                <div class="card">
+                    <table>
+                        <thead><tr><th>Email</th><th>Reason</th><th>Source</th><th>Date</th><th>Actions</th></tr></thead>
+                        <tbody id="suppressions-table"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Cleaning -->
+            <div id="page-cleaning" class="page">
+                <h2 class="mb-2">Email Cleaning</h2>
+                <div class="card">
+                    <h2>Verify Single Email</h2>
+                    <div class="form-group">
+                        <input type="email" id="verify-email" placeholder="Enter email to verify...">
+                    </div>
+                    <button class="btn btn-primary" onclick="verifyEmail()">Verify</button>
+                    <div id="verify-result" class="mt-2"></div>
+                </div>
+                <div class="card">
+                    <h2>Bulk Clean</h2>
+                    <div class="form-group">
+                        <textarea id="bulk-emails" placeholder="Paste emails, one per line..."></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="bulkClean()">Clean List</button>
+                    <div id="bulk-result" class="mt-2"></div>
+                </div>
+            </div>
+
+            <!-- AI -->
+            <div id="page-ai" class="page">
+                <h2 class="mb-2">AI Assistant</h2>
+                <div class="card">
+                    <h2>Draft Email</h2>
+                    <div class="form-group"><label>Purpose</label><input id="ai-purpose" placeholder="e.g. Welcome new subscribers"></div>
+                    <div class="form-group"><label>Audience</label><input id="ai-audience" placeholder="e.g. B2B tech decision makers"></div>
+                    <div class="form-group"><label>Tone</label><select id="ai-tone"><option>professional</option><option>friendly</option><option>casual</option><option>urgent</option></select></div>
+                    <div class="form-group"><label>Key Points (one per line)</label><textarea id="ai-points" rows="3"></textarea></div>
+                    <button class="btn btn-primary" onclick="aiDraftEmail()">Generate Draft</button>
+                    <div id="ai-draft-result"></div>
+                </div>
+                <div class="card">
+                    <h2>Classify Bounce</h2>
+                    <div class="form-group"><label>Bounce Message</label><input id="ai-bounce-msg" placeholder="e.g. 550 5.1.1 User not found"></div>
+                    <div class="form-group"><label>SMTP Code</label><input id="ai-bounce-code" placeholder="e.g. 550"></div>
+                    <button class="btn btn-primary" onclick="aiClassifyBounce()">Classify</button>
+                    <div id="ai-bounce-result"></div>
+                </div>
+                <div class="card">
+                    <h2>Analyze Campaign</h2>
+                    <div class="form-group"><label>Campaign</label><select id="ai-campaign-select"></select></div>
+                    <button class="btn btn-primary" onclick="aiAnalyzeCampaign()">Analyze</button>
+                    <div id="ai-analyze-result"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="import-modal">
+        <div class="modal">
+            <h2>Import Contacts</h2>
+            <div class="form-group"><label>Paste JSON or CSV (email, first_name, last_name)</label>
+                <textarea id="import-data" rows="6" placeholder='[{"email":"alice@test.com","first_name":"Alice","stream":"cold"}]'></textarea>
+            </div>
+            <div class="form-group"><label>Default Stream</label>
+                <select id="import-stream"><option value="cold">Cold</option><option value="optin">Opt-in</option><option value="engaged">Engaged</option></select>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="importContacts()">Import</button>
+                <button class="btn btn-secondary" onclick="closeModal('import-modal')">Cancel</button>
+            </div>
+            <div id="import-result" class="mt-2"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="list-modal">
+        <div class="modal">
+            <h2>Create List</h2>
+            <div class="form-group"><label>Name</label><input id="list-name" placeholder="List name"></div>
+            <div class="form-group"><label>Description</label><input id="list-desc" placeholder="Description"></div>
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="createList()">Create</button>
+                <button class="btn btn-secondary" onclick="closeModal('list-modal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="campaign-modal">
+        <div class="modal">
+            <h2>Create Campaign</h2>
+            <div class="form-group"><label>Name</label><input id="camp-name" placeholder="Campaign name"></div>
+            <div class="form-group"><label>Subject</label><input id="camp-subject" placeholder="Hello {{first_name}}!"></div>
+            <div class="form-group"><label>From Name</label><input id="camp-from-name" placeholder="Dev Team"></div>
+            <div class="form-group"><label>From Email</label><input id="camp-from-email" placeholder="hello@mail.localhost"></div>
+            <div class="form-group"><label>Stream</label>
+                <select id="camp-stream"><option value="cold">Cold</option><option value="optin">Opt-in</option><option value="engaged">Engaged</option></select>
+            </div>
+            <div class="form-group"><label>Target List</label><select id="camp-list"><option value="">All contacts</option></select></div>
+            <div class="form-group"><label>HTML Body</label><textarea id="camp-html" rows="6" placeholder="<h1>Hello {{first_name}}!</h1>"></textarea></div>
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="createCampaign()">Create Draft</button>
+                <button class="btn btn-secondary" onclick="closeModal('campaign-modal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="suppression-modal">
+        <div class="modal">
+            <h2>Add Suppression</h2>
+            <div class="form-group"><label>Email</label><input id="sup-email" placeholder="email@example.com"></div>
+            <div class="form-group"><label>Reason</label>
+                <select id="sup-reason"><option value="manual">Manual</option><option value="hard_bounce">Hard Bounce</option><option value="complaint">Complaint</option><option value="unsubscribe">Unsubscribe</option></select>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-danger" onclick="addSuppression()">Suppress</button>
+                <button class="btn btn-secondary" onclick="closeModal('suppression-modal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '';
+
+        // Navigation
+        document.querySelectorAll('.sidebar a[data-page]').forEach(link => {
+            link.addEventListener('click', e => {
+                e.preventDefault();
+                const page = link.dataset.page;
+                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+                document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+                document.getElementById('page-' + page).classList.add('active');
+                link.classList.add('active');
+                loadPage(page);
+            });
+        });
+
+        function loadPage(page) {
+            const loaders = { dashboard: loadDashboard, contacts: loadContacts, lists: loadLists, campaigns: loadCampaigns, suppressions: loadSuppressions, ai: loadAI };
+            if (loaders[page]) loaders[page]();
+        }
+
+        // API helper
+        async function api(path, opts = {}) {
+            const res = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+            return res.json();
+        }
+
+        // Modal helpers
+        function openModal(id) { document.getElementById(id).classList.add('open'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+        // Dashboard
+        async function loadDashboard() {
+            const data = await api('/dashboard/overview');
+            const c = data.contacts;
+            document.getElementById('dashboard-stats').innerHTML = `
+                <div class="stat-card"><div class="label">Total Contacts</div><div class="value blue">${c.total}</div></div>
+                <div class="stat-card"><div class="label">Active</div><div class="value green">${c.active}</div></div>
+                <div class="stat-card"><div class="label">Suppressed</div><div class="value red">${c.suppressed}</div></div>
+                <div class="stat-card"><div class="label">Campaigns</div><div class="value blue">${data.campaigns.total}</div></div>
+                <div class="stat-card"><div class="label">Total Events</div><div class="value orange">${data.events.total}</div></div>
+            `;
+            const streams = c.by_stream || {};
+            document.getElementById('stream-breakdown').innerHTML = Object.entries(streams).length
+                ? `<table><thead><tr><th>Stream</th><th>Active Contacts</th></tr></thead><tbody>${Object.entries(streams).map(([s, n]) => `<tr><td><span class="badge ${s}">${s}</span></td><td>${n}</td></tr>`).join('')}</tbody></table>`
+                : '<p class="text-muted">No contacts yet</p>';
+        }
+
+        // Contacts
+        async function loadContacts() {
+            const stream = document.getElementById('contacts-stream-filter').value;
+            const status = document.getElementById('contacts-status-filter').value;
+            let url = '/contacts?limit=50';
+            if (stream) url += '&stream=' + stream;
+            if (status) url += '&status=' + status;
+            const data = await api(url);
+            document.getElementById('contacts-table').innerHTML = data.contacts.map(c => `
+                <tr>
+                    <td>${c.email}</td>
+                    <td>${c.first_name || ''} ${c.last_name || ''}</td>
+                    <td><span class="badge ${c.stream}">${c.stream}</span></td>
+                    <td><span class="badge ${c.status}">${c.status}</span></td>
+                    <td>${c.engagement?.total_sent || 0}</td>
+                    <td>${c.engagement?.total_opened || 0}</td>
+                </tr>
+            `).join('');
+            document.getElementById('contacts-pagination').textContent = `Showing ${data.contacts.length} of ${data.total}`;
+        }
+
+        async function importContacts() {
+            const raw = document.getElementById('import-data').value.trim();
+            const stream = document.getElementById('import-stream').value;
+            let contacts;
+            try {
+                contacts = JSON.parse(raw);
+                if (!Array.isArray(contacts)) contacts = [contacts];
+            } catch {
+                const lines = raw.split('\n').filter(l => l.trim());
+                contacts = lines.map(l => {
+                    const parts = l.split(',').map(p => p.trim());
+                    return { email: parts[0], first_name: parts[1] || '', last_name: parts[2] || '', stream };
+                });
+            }
+            contacts.forEach(c => { if (!c.stream) c.stream = stream; });
+            const data = await api('/contacts/import', { method: 'POST', body: JSON.stringify({ contacts }) });
+            document.getElementById('import-result').innerHTML = `<span class="badge active">Imported: ${data.imported}</span> <span class="badge cold">Skipped: ${data.skipped}</span>`;
+            loadContacts();
+        }
+
+        // Lists
+        async function loadLists() {
+            const data = await api('/lists');
+            document.getElementById('lists-table').innerHTML = data.lists.map(l => `
+                <tr>
+                    <td>${l.name}</td>
+                    <td>${l.list_type}</td>
+                    <td>${l.contact_count}</td>
+                    <td>${new Date(l.created_at).toLocaleDateString()}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function createList() {
+            const name = document.getElementById('list-name').value;
+            const desc = document.getElementById('list-desc').value;
+            await api('/lists', { method: 'POST', body: JSON.stringify({ name, description: desc }) });
+            closeModal('list-modal');
+            loadLists();
+        }
+
+        // Campaigns
+        async function loadCampaigns() {
+            const data = await api('/campaigns');
+            document.getElementById('campaigns-table').innerHTML = data.campaigns.map(c => `
+                <tr>
+                    <td>${c.name}</td>
+                    <td><span class="badge ${c.stream}">${c.stream}</span></td>
+                    <td><span class="badge ${c.status}">${c.status}</span></td>
+                    <td>${c.stats?.sent || 0} / ${c.stats?.total_recipients || 0}</td>
+                    <td>${c.stats?.opened || 0}</td>
+                    <td>${c.stats?.bounced || 0}</td>
+                    <td>${c.status === 'draft' ? `<button class="btn btn-success" onclick="launchCampaign('${c._id}')">Launch</button>` : c.status === 'sending' ? `<button class="btn btn-secondary" onclick="pauseCampaign('${c._id}')">Pause</button>` : ''}</td>
+                </tr>
+            `).join('');
+            // Also populate AI campaign select
+            const sel = document.getElementById('ai-campaign-select');
+            if (sel) {
+                sel.innerHTML = data.campaigns.map(c => `<option value="${c._id}">${c.name} (${c.status})</option>`).join('');
+            }
+        }
+
+        async function createCampaign() {
+            const body = {
+                name: document.getElementById('camp-name').value,
+                subject: document.getElementById('camp-subject').value,
+                from_name: document.getElementById('camp-from-name').value,
+                from_email: document.getElementById('camp-from-email').value,
+                stream: document.getElementById('camp-stream').value,
+                html_body: document.getElementById('camp-html').value,
+                target_list_id: document.getElementById('camp-list').value || undefined,
+            };
+            await api('/campaigns', { method: 'POST', body: JSON.stringify(body) });
+            closeModal('campaign-modal');
+            loadCampaigns();
+        }
+
+        async function launchCampaign(id) {
+            if (!confirm('Launch this campaign? Emails will be sent.')) return;
+            const data = await api('/campaigns/' + id + '/launch', { method: 'POST' });
+            alert(`Campaign launched! ${data.enqueued} emails enqueued.`);
+            loadCampaigns();
+        }
+
+        async function pauseCampaign(id) {
+            await api('/campaigns/' + id + '/pause', { method: 'POST' });
+            loadCampaigns();
+        }
+
+        // Suppressions
+        async function loadSuppressions() {
+            const [supData, breakdown] = await Promise.all([api('/suppressions'), api('/dashboard/suppression-breakdown')]);
+            document.getElementById('suppression-stats').innerHTML = `
+                <div class="stat-card"><div class="label">Total Suppressed</div><div class="value red">${breakdown.total}</div></div>
+                ${Object.entries(breakdown.by_reason || {}).map(([r, c]) => `<div class="stat-card"><div class="label">${r.replace('_', ' ')}</div><div class="value">${c}</div></div>`).join('')}
+            `;
+            document.getElementById('suppressions-table').innerHTML = supData.suppressions.map(s => `
+                <tr>
+                    <td>${s.email}</td>
+                    <td><span class="badge suppressed">${s.reason}</span></td>
+                    <td>${s.source || '-'}</td>
+                    <td>${new Date(s.created_at).toLocaleDateString()}</td>
+                    <td><button class="btn btn-secondary" onclick="removeSuppression('${s.email}')">Remove</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function addSuppression() {
+            const email = document.getElementById('sup-email').value;
+            const reason = document.getElementById('sup-reason').value;
+            await api('/suppressions', { method: 'POST', body: JSON.stringify({ email, reason }) });
+            closeModal('suppression-modal');
+            loadSuppressions();
+        }
+
+        async function removeSuppression(email) {
+            if (!confirm('Remove ' + email + ' from suppression list?')) return;
+            await api('/suppressions/' + email, { method: 'DELETE' });
+            loadSuppressions();
+        }
+
+        // Cleaning
+        async function verifyEmail() {
+            const email = document.getElementById('verify-email').value;
+            const data = await api('/cleaning/verify', { method: 'POST', body: JSON.stringify({ email }) });
+            const color = data.verdict === 'valid' ? 'green' : 'red';
+            document.getElementById('verify-result').innerHTML = `
+                <div class="card mt-2">
+                    <p><strong>Verdict:</strong> <span class="badge ${data.verdict === 'valid' ? 'active' : 'suppressed'}">${data.verdict}</span></p>
+                    <p><strong>MX Record:</strong> ${data.mx_record || 'None'}</p>
+                    <p><strong>Role:</strong> ${data.is_role ? 'Yes' : 'No'} | <strong>Disposable:</strong> ${data.is_disposable ? 'Yes' : 'No'}</p>
+                </div>`;
+        }
+
+        async function bulkClean() {
+            const emails = document.getElementById('bulk-emails').value.split('\n').map(e => e.trim()).filter(e => e);
+            const data = await api('/cleaning/bulk', { method: 'POST', body: JSON.stringify({ emails }) });
+            const s = data.summary;
+            document.getElementById('bulk-result').innerHTML = `
+                <div class="stats-grid mt-2">
+                    <div class="stat-card"><div class="label">Valid</div><div class="value green">${s.valid}</div></div>
+                    <div class="stat-card"><div class="label">Invalid Syntax</div><div class="value red">${s.invalid_syntax}</div></div>
+                    <div class="stat-card"><div class="label">No MX</div><div class="value red">${s.no_mx}</div></div>
+                    <div class="stat-card"><div class="label">Disposable</div><div class="value orange">${s.disposable}</div></div>
+                    <div class="stat-card"><div class="label">Role</div><div class="value orange">${s.role}</div></div>
+                    <div class="stat-card"><div class="label">Duplicate</div><div class="value">${s.duplicate}</div></div>
+                </div>`;
+        }
+
+        // AI
+        async function loadAI() { loadCampaigns(); }
+
+        async function aiDraftEmail() {
+            const btn = event.target;
+            btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Generating...';
+            const points = document.getElementById('ai-points').value.split('\n').filter(p => p.trim());
+            const data = await api('/ai/draft-email', { method: 'POST', body: JSON.stringify({
+                purpose: document.getElementById('ai-purpose').value,
+                audience: document.getElementById('ai-audience').value,
+                tone: document.getElementById('ai-tone').value,
+                key_points: points.length ? points : null,
+            })});
+            btn.disabled = false; btn.textContent = 'Generate Draft';
+            document.getElementById('ai-draft-result').innerHTML = `
+                <div class="ai-response mt-2"><strong>Status:</strong> ${data.status} (${data.approval_required ? 'Needs approval' : 'Ready'})\n\n${data.content}</div>`;
+        }
+
+        async function aiClassifyBounce() {
+            const btn = event.target;
+            btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Classifying...';
+            const data = await api('/ai/classify-bounce', { method: 'POST', body: JSON.stringify({
+                bounce_message: document.getElementById('ai-bounce-msg').value,
+                smtp_code: document.getElementById('ai-bounce-code').value,
+            })});
+            btn.disabled = false; btn.textContent = 'Classify';
+            document.getElementById('ai-bounce-result').innerHTML = `<div class="ai-response mt-2">${data.classification}</div>`;
+        }
+
+        async function aiAnalyzeCampaign() {
+            const id = document.getElementById('ai-campaign-select').value;
+            if (!id) return;
+            const btn = event.target;
+            btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Analyzing...';
+            const data = await api('/ai/analyze-campaign/' + id, { method: 'POST' });
+            btn.disabled = false; btn.textContent = 'Analyze';
+            document.getElementById('ai-analyze-result').innerHTML = `<div class="ai-response mt-2">${data.analysis}</div>`;
+        }
+
+        // Init
+        loadDashboard();
+    </script>
+</body>
+</html>

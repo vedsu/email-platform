@@ -1,0 +1,107 @@
+services:
+
+  # ── Your stack ─────────────────────────────────────────────
+
+  mongodb:
+    image: mongo:7
+    container_name: ep-mongodb
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-email_platform}
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ep-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: ep-mailpit
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    restart: unless-stopped
+
+  # ── Postal dependencies ────────────────────────────────────
+
+  mariadb:
+    image: mariadb:11
+    container_name: ep-mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: ${POSTAL_MARIADB_ROOT_PASSWORD:-postal_root_pass}
+      MARIADB_DATABASE: ${POSTAL_MARIADB_DATABASE:-postal}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: ep-rabbitmq
+    ports:
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${POSTAL_RABBITMQ_USER:-postal}
+      RABBITMQ_DEFAULT_PASS: ${POSTAL_RABBITMQ_PASSWORD:-postal_pass}
+      RABBITMQ_DEFAULT_VHOST: ${POSTAL_RABBITMQ_VHOST:-/postal}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  # ── Postal (mail engine) ───────────────────────────────────
+
+  postal:
+    image: ghcr.io/postalserver/postal:latest
+    container_name: ep-postal-web
+    command: postal web-server
+    depends_on:
+      mariadb:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    ports:
+      - "5000:5000"
+    environment:
+      BIND_ADDRESS: 0.0.0.0
+    volumes:
+      - ./postal/postal.yml:/config/postal.yml
+      - ./postal/signing.key:/config/signing.key
+    restart: unless-stopped
+
+  postal-worker:
+    image: ghcr.io/postalserver/postal:latest
+    container_name: ep-postal-worker
+    command: postal worker
+    depends_on:
+      - postal
+    volumes:
+      - ./postal/postal.yml:/config/postal.yml
+      - ./postal/signing.key:/config/signing.key
+    restart: unless-stopped
+
+  postal-smtp:
+    image: ghcr.io/postalserver/postal:latest
+    container_name: ep-postal-smtp
+    command: postal smtp-server
+    depends_on:
+      - postal
+    ports:
+      - "2525:25"
+    volumes:
+      - ./postal/postal.yml:/config/postal.yml
+      - ./postal/signing.key:/config/signing.key
+    restart: unless-stopped
+
+
+volumes:
+  mongo_data:
+  redis_data:
+  mariadb_data:
+  rabbitmq_data:

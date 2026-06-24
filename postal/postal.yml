@@ -1,0 +1,43 @@
+version: 2
+
+postal:
+  web_hostname: localhost
+  web_protocol: http
+  smtp_hostname: postal.localhost
+  smtp_relays:
+    - smtp://mailpit:1025?ssl_mode=None
+
+main_db:
+  host: mariadb
+  port: 3306
+  username: root
+  password: postal_root_pass
+  database: postal
+
+message_db:
+  host: mariadb
+  port: 3306
+  username: root
+  password: postal_root_pass
+  prefix: postal
+
+rabbitmq:
+  host: rabbitmq
+  port: 5672
+  username: postal
+  password: postal_pass
+  vhost: /postal
+
+smtp_server:
+  port: 25
+
+dns:
+  mx_records:
+    - mx.postal.localhost
+  smtp_server_hostname: postal.localhost
+  spf_include: spf.postal.localhost
+  return_path_domain: rp.postal.localhost
+  track_domain: track.postal.localhost
+
+logging:
+  stdout: true
