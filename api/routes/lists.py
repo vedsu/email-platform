@@ -82,3 +82,44 @@ async def add_contacts_to_list(list_id: str, emails: list[str]):
     )
 
     return {"matched": result.matched_count, "modified": result.modified_count}
+
+
+@router.delete("/{list_id}/delete")
+async def delete_list(list_id: str):
+    from bson import ObjectId
+
+    db = get_db()
+    lst = await db.lists.find_one({"_id": ObjectId(list_id)})
+    if not lst:
+        raise HTTPException(status_code=404, detail="List not found")
+
+    await db.contacts.update_many(
+        {"list_ids": list_id},
+        {"$pull": {"list_ids": list_id}},
+    )
+    await db.lists.delete_one({"_id": ObjectId(list_id)})
+    return {"deleted": True, "contacts_removed_from_list": True}
+
+
+@router.delete("/{list_id}/delete-with-contacts")
+async def delete_list_with_contacts(list_id: str):
+    from bson import ObjectId
+
+    db = get_db()
+    lst = await db.lists.find_one({"_id": ObjectId(list_id)})
+    if not lst:
+        raise HTTPException(status_code=404, detail="List not found")
+
+    exclusive = await db.contacts.count_documents({
+        "list_ids": [list_id],
+    })
+
+    await db.contacts.delete_many({"list_ids": [list_id]})
+
+    await db.contacts.update_many(
+        {"list_ids": list_id},
+        {"$pull": {"list_ids": list_id}},
+    )
+
+    await db.lists.delete_one({"_id": ObjectId(list_id)})
+    return {"deleted": True, "contacts_deleted": exclusive}

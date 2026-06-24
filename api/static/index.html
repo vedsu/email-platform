@@ -96,8 +96,28 @@
         .mt-1 { margin-top: 4px; } .mt-2 { margin-top: 8px; } .mb-2 { margin-bottom: 8px; }
         .hidden { display: none; }
         .page { display: none; } .page.active { display: block; }
-        .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+        .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
         .filter-bar select, .filter-bar input { padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd; font-size: 12px; }
+        .filter-bar input[type="search"] { min-width: 200px; }
+
+        /* Toast */
+        .toast { position: fixed; top: 20px; right: 20px; padding: 10px 20px; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 500; z-index: 200; opacity: 0; transform: translateY(-10px); transition: all 0.3s; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast-success { background: #22c55e; }
+        .toast-error { background: #ef4444; }
+        .toast-warning { background: #f59e0b; }
+
+        /* Multi-select dropdown */
+        .multi-select { position: relative; }
+        .ms-display { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; min-height: 32px; }
+        .ms-dropdown { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ddd; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .ms-dropdown.open { display: block; }
+        .ms-option { display: block; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+        .ms-option:hover { background: #f0f2f5; }
+        .ms-option input { margin-right: 6px; }
+
+        /* Import success */
+        .import-success { padding: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -152,10 +172,12 @@
             <div id="page-contacts" class="page">
                 <div class="card-header"><h2>Contacts</h2><div class="btn-row"><button class="btn btn-primary" onclick="openModal('import-modal')">Import</button><button class="btn btn-secondary" onclick="exportCSV('contacts')">Export CSV</button></div></div>
                 <div class="filter-bar">
-                    <select id="c-stream" onchange="loadContacts()"><option value="">All Streams</option><option value="optin">Opt-in</option><option value="engaged">Engaged</option><option value="cold">Cold</option></select>
-                    <select id="c-status" onchange="loadContacts()"><option value="">All Status</option><option value="active">Active</option><option value="suppressed">Suppressed</option><option value="unsubscribed">Unsubscribed</option></select>
+                    <input type="search" id="c-search" placeholder="Search by email..." oninput="resetContactsPage()">
+                    <select id="c-list" onchange="resetContactsPage()"><option value="">All Lists</option></select>
+                    <select id="c-stream" onchange="resetContactsPage()"><option value="">All Streams</option><option value="optin">Opt-in</option><option value="engaged">Engaged</option><option value="cold">Cold</option></select>
+                    <select id="c-status" onchange="resetContactsPage()"><option value="">All Status</option><option value="active">Active</option><option value="suppressed">Suppressed</option><option value="unsubscribed">Unsubscribed</option></select>
                 </div>
-                <div class="card"><table><thead><tr><th>Email</th><th>Name</th><th>Stream</th><th>Status</th><th>Sent</th><th>Opened</th><th>Clicked</th></tr></thead><tbody id="contacts-tbody"></tbody></table><div id="contacts-info" class="text-muted mt-1"></div></div>
+                <div class="card"><table><thead><tr><th>Email</th><th>Name</th><th>Stream</th><th>Status</th><th>Lists</th><th>Sent</th><th>Opened</th><th>Clicked</th></tr></thead><tbody id="contacts-tbody"></tbody></table><div id="contacts-info" class="text-muted mt-1"></div></div>
             </div>
 
             <!-- Lists -->
@@ -178,7 +200,7 @@
 
             <!-- Suppressions -->
             <div id="page-suppressions" class="page">
-                <div class="card-header"><h2>Suppressions</h2><div class="btn-row"><button class="btn btn-danger btn-sm" onclick="openModal('sup-modal')">Add</button><button class="btn btn-secondary btn-sm" onclick="exportCSV('suppressions')">Export</button></div></div>
+                <div class="card-header"><h2>Suppressions</h2><div class="btn-row"><button class="btn btn-danger btn-sm" onclick="openModal('sup-modal')">Add One</button><button class="btn btn-danger btn-sm" onclick="openModal('sup-bulk-modal')">Bulk Upload</button><button class="btn btn-secondary btn-sm" onclick="exportCSV('suppressions')">Export</button></div></div>
                 <div class="stats-grid" id="sup-stats"></div>
                 <div class="card"><table><thead><tr><th>Email</th><th>Reason</th><th>Source</th><th>Date</th><th>Actions</th></tr></thead><tbody id="sup-tbody"></tbody></table></div>
             </div>
@@ -263,7 +285,7 @@
         <div class="form-group"><label>Preheader</label><input id="camp-preheader"></div>
         <div class="form-row"><div class="form-group"><label>From Name</label><input id="camp-from-name" value="Dev Team"></div><div class="form-group"><label>From Email</label><input id="camp-from-email" value="hello@mail.localhost"></div></div>
         <div class="form-row"><div class="form-group"><label>Stream</label><select id="camp-stream"><option value="cold">Cold</option><option value="optin">Opt-in</option><option value="engaged">Engaged</option></select></div><div class="form-group"><label>Schedule (optional)</label><input id="camp-schedule" type="datetime-local"></div></div>
-        <div class="form-group"><label>Target Lists (hold Ctrl for multiple)</label><select id="camp-lists" multiple style="min-height:70px"></select></div>
+        <div class="form-group"><label>Target Lists</label><div id="camp-lists-ms"></div></div>
         <div class="form-group"><label>HTML Body</label><textarea id="camp-html" rows="6"></textarea></div>
         <div class="btn-row"><button class="btn btn-primary" onclick="createCampaign()">Create</button><button class="btn btn-secondary" onclick="closeModal('campaign-modal')">Cancel</button></div>
     </div></div>
@@ -280,6 +302,12 @@
         <div class="form-group"><label>Password</label><input id="usr-pass" type="password"></div>
         <div class="form-group"><label>Role</label><select id="usr-role"><option value="member">Member</option><option value="admin">Admin</option></select></div>
         <div class="btn-row"><button class="btn btn-primary" onclick="createUser()">Create</button><button class="btn btn-secondary" onclick="closeModal('user-modal')">Cancel</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="sup-bulk-modal"><div class="modal"><h2>Bulk Suppress Emails</h2>
+        <div class="form-group"><label>Paste emails (one per line)</label><textarea id="sup-bulk-emails" rows="6" placeholder="bad@example.com&#10;bounce@test.com&#10;spam@domain.com"></textarea></div>
+        <div class="form-group"><label>Reason</label><select id="sup-bulk-reason"><option value="manual">Manual</option><option value="hard_bounce">Hard Bounce</option><option value="complaint">Complaint</option><option value="unsubscribe">Unsubscribe</option></select></div>
+        <div class="btn-row"><button class="btn btn-danger" onclick="bulkSuppressUpload()">Suppress All</button><button class="btn btn-secondary" onclick="closeModal('sup-bulk-modal')">Cancel</button></div>
     </div></div>
 
     <script src="/static/app.js"></script>
