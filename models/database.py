@@ -6,6 +6,8 @@ from models.campaign import CAMPAIGN_INDEXES
 from models.list import LIST_INDEXES
 from models.event import EVENT_INDEXES
 from models.suppression import SUPPRESSION_INDEXES
+from models.user import USER_INDEXES
+from models.template import TEMPLATE_INDEXES
 
 client: AsyncIOMotorClient = None
 db: AsyncIOMotorDatabase = None
@@ -16,6 +18,8 @@ COLLECTION_INDEXES = {
     "lists": LIST_INDEXES,
     "events": EVENT_INDEXES,
     "suppressions": SUPPRESSION_INDEXES,
+    "users": USER_INDEXES,
+    "templates": TEMPLATE_INDEXES,
 }
 
 

@@ -40,6 +40,17 @@ class Settings(BaseSettings):
     anthropic_api_key: Optional[str] = None
     claude_model: str = "claude-sonnet-4-6"
 
+    s3_endpoint: Optional[str] = None
+    s3_bucket: str = ""
+    s3_public_url: Optional[str] = None
+    s3_access_key: Optional[str] = None
+    s3_secret_key: Optional[str] = None
+    s3_region: str = "us-east-1"
+
+    jwt_secret_key: str = "change-me-to-random-64-chars"
+    jwt_expiry_hours: int = 24
+    default_admin_email: str = "admin@localhost"
+
     log_level: str = "DEBUG"
 
     model_config = {"env_file": ".env", "extra": "ignore"}

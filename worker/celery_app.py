@@ -21,3 +21,5 @@ celery.conf.update(
 )
 
 celery.autodiscover_tasks(["worker"])
+
+import worker.scheduler  # noqa: F401 — registers beat schedule
