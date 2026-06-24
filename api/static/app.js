@@ -71,7 +71,7 @@ document.querySelectorAll('.sidebar a[data-page]').forEach(link => {
 });
 
 function loadPage(p) {
-    const m = { dashboard: loadDashboard, contacts: loadContacts, lists: loadLists, templates: loadTemplates, campaigns: loadCampaigns, suppressions: loadSuppressions, reports: loadReports, cleaning: ()=>{}, ai: loadAI, users: loadUsers };
+    const m = { dashboard: loadDashboard, contacts: loadContacts, lists: loadLists, templates: loadTemplates, campaigns: loadCampaigns, suppressions: loadSuppressions, reports: loadReports, cleaning: ()=>{}, ai: loadAI, users: loadUsers, domains: loadDomains, ippools: loadIPPools, admin: loadAdmin };
     if (m[p]) m[p]();
 }
 
@@ -553,6 +553,148 @@ async function resetPassword(id) {
 // --- CSV Export ---
 function exportCSV(type) {
     window.open('/csv/export-' + type, '_blank');
+}
+
+// --- Domains ---
+async function loadDomains() {
+    const d = await api('/domains');
+    document.getElementById('domains-tbody').innerHTML = d.domains.map(dm => {
+        const statusClass = dm.status === 'verified' ? 'active' : dm.status === 'failed' ? 'suppressed' : 'draft';
+        return `<tr>
+            <td><strong>${dm.full_domain}</strong><br><span class="text-muted">${dm.domain}</span></td>
+            <td><span class="badge ${dm.stream}">${dm.stream}</span></td>
+            <td><span class="badge ${statusClass}">${dm.status}</span></td>
+            <td>${dm.ip_pool_id ? '<span class="badge active">Assigned</span>' : '<span class="text-muted">None</span>'}</td>
+            <td>
+                <button class="btn btn-secondary btn-sm" onclick="showDNSRecords('${dm._id}')">DNS Records</button>
+                <button class="btn btn-primary btn-sm" onclick="verifyDomain('${dm._id}')">Verify</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteDomain('${dm._id}')">Del</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+async function addDomain() {
+    const body = {
+        domain: document.getElementById('dom-domain').value,
+        stream: document.getElementById('dom-stream').value,
+        subdomain_prefix: document.getElementById('dom-prefix').value || undefined,
+    };
+    const d = await api('/domains', { method: 'POST', body: JSON.stringify(body) });
+    closeModal('domain-modal');
+    toast(`Domain ${d.full_domain} added. Configure DNS records now.`);
+    loadDomains();
+    showDNSRecords(d.id);
+}
+
+async function showDNSRecords(domainId) {
+    const d = await api('/domains/' + domainId);
+    const panel = document.getElementById('dns-records-panel');
+    panel.classList.remove('hidden');
+    document.getElementById('dns-records-content').innerHTML = `
+        <p class="mb-2"><strong>${d.full_domain}</strong> — Add these records at your domain provider:</p>
+        <table><thead><tr><th>Type</th><th>Hostname</th><th>Value</th><th>Status</th></tr></thead><tbody>
+        ${d.dns_records.map(r => `<tr>
+            <td><strong>${r.record_type}</strong></td>
+            <td><code style="font-size:11px">${r.hostname}</code></td>
+            <td><code style="font-size:11px;word-break:break-all">${r.value}</code></td>
+            <td>${r.verified ? '<span class="badge active">Verified</span>' : '<span class="badge draft">Pending</span>'}</td>
+        </tr>`).join('')}
+        </tbody></table>`;
+}
+
+async function verifyDomain(id) {
+    const d = await api('/domains/' + id + '/verify', { method: 'POST' });
+    toast(d.all_passed ? `${d.domain} verified!` : `${d.domain}: some records not found yet`, d.all_passed ? 'success' : 'warning');
+    loadDomains();
+    showDNSRecords(id);
+}
+
+async function deleteDomain(id) {
+    if (!confirm('Delete this domain?')) return;
+    await api('/domains/' + id, { method: 'DELETE' });
+    toast('Domain deleted'); loadDomains();
+    document.getElementById('dns-records-panel').classList.add('hidden');
+}
+
+// --- IP Pools ---
+async function loadIPPools() {
+    const [overview, pools, ips] = await Promise.all([api('/ip-pools/overview'), api('/ip-pools'), api('/ip-pools/ips')]);
+
+    document.getElementById('ip-stats').innerHTML = `
+        <div class="stat-card"><div class="label">Total IPs</div><div class="value blue">${overview.total_ips}</div></div>
+        <div class="stat-card"><div class="label">Total Pools</div><div class="value blue">${overview.total_pools}</div></div>
+        ${Object.entries(overview.by_status || {}).map(([s,c]) => `<div class="stat-card"><div class="label">${s}</div><div class="value">${c}</div></div>`).join('')}
+    `;
+
+    document.getElementById('pools-tbody').innerHTML = pools.pools.map(p => `<tr>
+        <td><strong>${p.name}</strong><br><span class="text-muted">${p.description||''}</span></td>
+        <td><span class="badge ${p.stream}">${p.stream}</span></td>
+        <td>${p.ip_count || 0}</td>
+        <td>${(p.domain_ids||[]).length}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deletePool('${p._id}')">Del</button></td>
+    </tr>`).join('');
+
+    document.getElementById('ips-tbody').innerHTML = ips.ips.map(ip => `<tr>
+        <td><strong>${ip.ip}</strong></td>
+        <td><span class="badge">${ip.ip_type}</span></td>
+        <td><span class="badge ${ip.stream}">${ip.stream}</span></td>
+        <td><span class="badge ${ip.status === 'active' ? 'active' : ip.status === 'blocklisted' ? 'suppressed' : 'draft'}">${ip.status}</span></td>
+        <td>${ip.domain_name || '-'}</td>
+        <td>${ip.pool_name || '-'}</td>
+        <td>${ip.daily_cap}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteIP('${ip._id}')">Del</button></td>
+    </tr>`).join('');
+
+    // Populate pool selector in IP modal
+    const poolSel = document.getElementById('ip-pool');
+    poolSel.innerHTML = '<option value="">None</option>' + pools.pools.map(p => `<option value="${p._id}">${p.name}</option>`).join('');
+}
+
+async function createPool() {
+    await api('/ip-pools', { method: 'POST', body: JSON.stringify({ name: document.getElementById('pool-name').value, stream: document.getElementById('pool-stream').value, description: document.getElementById('pool-desc').value }) });
+    closeModal('pool-modal'); toast('Pool created'); loadIPPools();
+}
+
+async function addIP() {
+    await api('/ip-pools/ips', { method: 'POST', body: JSON.stringify({
+        ip: document.getElementById('ip-addr').value,
+        hostname: document.getElementById('ip-hostname').value,
+        ip_type: document.getElementById('ip-type').value,
+        stream: document.getElementById('ip-stream').value,
+        daily_cap: parseInt(document.getElementById('ip-cap').value) || 100,
+        pool_id: document.getElementById('ip-pool').value || undefined,
+    })});
+    closeModal('ip-modal'); toast('IP added'); loadIPPools();
+}
+
+async function deletePool(id) { if (!confirm('Delete this pool?')) return; await api('/ip-pools/' + id, {method:'DELETE'}); toast('Pool deleted'); loadIPPools(); }
+async function deleteIP(id) { if (!confirm('Delete this IP?')) return; await api('/ip-pools/ips/' + id, {method:'DELETE'}); toast('IP deleted'); loadIPPools(); }
+
+// --- Admin ---
+async function loadAdmin() {
+    const [health, users, audit] = await Promise.all([api('/admin/system-health'), api('/admin/per-user-stats'), api('/admin/audit-log')]);
+
+    document.getElementById('admin-health').innerHTML = Object.entries(health.services).map(([s, v]) =>
+        `<span class="badge ${v === 'connected' || v === 'reachable' ? 'active' : 'suppressed'}" style="margin-right:8px">${s}: ${v}</span>`
+    ).join('');
+
+    document.getElementById('admin-collections').innerHTML = `<table><thead><tr><th>Collection</th><th>Documents</th></tr></thead><tbody>${Object.entries(health.collections).map(([c,n]) => `<tr><td>${c}</td><td>${n}</td></tr>`).join('')}</tbody></table>`;
+
+    document.getElementById('admin-users-tbody').innerHTML = users.users.map(u => `<tr>
+        <td>${u.email}</td><td><span class="badge ${u.role}">${u.role}</span></td>
+        <td>${u.campaigns}</td><td>${u.total_sent}</td><td>${u.total_opened}</td><td>${u.total_bounced}</td>
+    </tr>`).join('');
+
+    document.getElementById('admin-audit').innerHTML = `
+        <h3 style="font-size:13px;margin-bottom:8px">Recent Campaigns</h3>
+        <table><thead><tr><th>Name</th><th>Status</th><th>Created</th></tr></thead><tbody>
+        ${audit.recent_campaigns.map(c => `<tr><td>${c.name}</td><td><span class="badge ${c.status}">${c.status}</span></td><td>${new Date(c.created_at).toLocaleString()}</td></tr>`).join('')}
+        </tbody></table>
+        <h3 style="font-size:13px;margin:12px 0 8px">Recent Logins</h3>
+        <table><thead><tr><th>User</th><th>Last Login</th></tr></thead><tbody>
+        ${audit.recent_logins.map(l => `<tr><td>${l.email}</td><td>${new Date(l.last_login_at).toLocaleString()}</td></tr>`).join('')}
+        </tbody></table>`;
 }
 
 // --- Init ---

@@ -8,6 +8,8 @@ from models.event import EVENT_INDEXES
 from models.suppression import SUPPRESSION_INDEXES
 from models.user import USER_INDEXES
 from models.template import TEMPLATE_INDEXES
+from models.domain import DOMAIN_INDEXES
+from models.ip_pool import IP_POOL_INDEXES, IP_ADDRESS_INDEXES
 
 client: AsyncIOMotorClient = None
 db: AsyncIOMotorDatabase = None
@@ -20,6 +22,9 @@ COLLECTION_INDEXES = {
     "suppressions": SUPPRESSION_INDEXES,
     "users": USER_INDEXES,
     "templates": TEMPLATE_INDEXES,
+    "domains": DOMAIN_INDEXES,
+    "ip_pools": IP_POOL_INDEXES,
+    "ip_addresses": IP_ADDRESS_INDEXES,
 }
 
 

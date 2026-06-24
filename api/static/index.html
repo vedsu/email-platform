@@ -151,9 +151,13 @@
             <div class="section-label">Tools</div>
             <a href="#" data-page="cleaning">Email Cleaning</a>
             <a href="#" data-page="ai">AI Assistant</a>
+            <div class="section-label">Infrastructure</div>
+            <a href="#" data-page="domains">Domains</a>
+            <a href="#" data-page="ippools">IP Pools</a>
             <div id="admin-nav" class="hidden">
                 <div class="section-label">Admin</div>
                 <a href="#" data-page="users">Users</a>
+                <a href="#" data-page="admin">System</a>
             </div>
             <div class="sidebar-footer">
                 <a href="#" onclick="doLogout()">Logout</a>
@@ -249,6 +253,30 @@
                 <div class="card-header"><h2>User Management</h2><button class="btn btn-primary" onclick="openModal('user-modal')">Create User</button></div>
                 <div class="card"><table><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Active</th><th>Last Login</th><th>Actions</th></tr></thead><tbody id="users-tbody"></tbody></table></div>
             </div>
+
+            <!-- Domains -->
+            <div id="page-domains" class="page">
+                <div class="card-header"><h2>Domains</h2><button class="btn btn-primary" onclick="openModal('domain-modal')">Add Domain</button></div>
+                <div class="card"><table><thead><tr><th>Domain</th><th>Stream</th><th>Status</th><th>Pool</th><th>Actions</th></tr></thead><tbody id="domains-tbody"></tbody></table></div>
+                <div id="dns-records-panel" class="card hidden"><h2>DNS Records</h2><div id="dns-records-content"></div></div>
+            </div>
+
+            <!-- IP Pools -->
+            <div id="page-ippools" class="page">
+                <div class="card-header"><h2>IP Pools & Addresses</h2><div class="btn-row"><button class="btn btn-primary" onclick="openModal('pool-modal')">Create Pool</button><button class="btn btn-success" onclick="openModal('ip-modal')">Add IP</button></div></div>
+                <div class="stats-grid" id="ip-stats"></div>
+                <div class="card"><h2>Pools</h2><table><thead><tr><th>Name</th><th>Stream</th><th>IPs</th><th>Domains</th><th>Actions</th></tr></thead><tbody id="pools-tbody"></tbody></table></div>
+                <div class="card"><h2>IP Addresses</h2><table><thead><tr><th>IP</th><th>Type</th><th>Stream</th><th>Status</th><th>Domain</th><th>Pool</th><th>Daily Cap</th><th>Actions</th></tr></thead><tbody id="ips-tbody"></tbody></table></div>
+            </div>
+
+            <!-- Admin System -->
+            <div id="page-admin" class="page">
+                <h2 class="mb-2">System Administration</h2>
+                <div class="card"><h2>Service Health</h2><div id="admin-health"></div></div>
+                <div class="card"><h2>Collection Sizes</h2><div id="admin-collections"></div></div>
+                <div class="card"><h2>Per-User Stats</h2><table><thead><tr><th>User</th><th>Role</th><th>Campaigns</th><th>Sent</th><th>Opened</th><th>Bounced</th></tr></thead><tbody id="admin-users-tbody"></tbody></table></div>
+                <div class="card"><h2>Recent Activity</h2><div id="admin-audit"></div></div>
+            </div>
         </div>
     </div>
 
@@ -302,6 +330,29 @@
         <div class="form-group"><label>Password</label><input id="usr-pass" type="password"></div>
         <div class="form-group"><label>Role</label><select id="usr-role"><option value="member">Member</option><option value="admin">Admin</option></select></div>
         <div class="btn-row"><button class="btn btn-primary" onclick="createUser()">Create</button><button class="btn btn-secondary" onclick="closeModal('user-modal')">Cancel</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="domain-modal"><div class="modal"><h2>Add Sending Domain</h2>
+        <div class="form-group"><label>Root Domain</label><input id="dom-domain" placeholder="yourdomain.com"></div>
+        <div class="form-group"><label>Stream</label><select id="dom-stream"><option value="optin">Opt-in (mail.)</option><option value="engaged">Engaged (eng.)</option><option value="cold">Cold (out.)</option></select></div>
+        <div class="form-group"><label>Custom subdomain prefix (optional)</label><input id="dom-prefix" placeholder="Leave empty for default"></div>
+        <div class="btn-row"><button class="btn btn-primary" onclick="addDomain()">Add Domain</button><button class="btn btn-secondary" onclick="closeModal('domain-modal')">Cancel</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="pool-modal"><div class="modal"><h2>Create IP Pool</h2>
+        <div class="form-group"><label>Name</label><input id="pool-name" placeholder="e.g. Optin Pool"></div>
+        <div class="form-group"><label>Stream</label><select id="pool-stream"><option value="optin">Opt-in</option><option value="engaged">Engaged</option><option value="cold">Cold</option></select></div>
+        <div class="form-group"><label>Description</label><input id="pool-desc" placeholder="Optional"></div>
+        <div class="btn-row"><button class="btn btn-primary" onclick="createPool()">Create</button><button class="btn btn-secondary" onclick="closeModal('pool-modal')">Cancel</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="ip-modal"><div class="modal"><h2>Add IP Address</h2>
+        <div class="form-group"><label>IP Address</label><input id="ip-addr" placeholder="192.168.1.1"></div>
+        <div class="form-group"><label>Hostname</label><input id="ip-hostname" placeholder="mail.yourdomain.com"></div>
+        <div class="form-row"><div class="form-group"><label>Type</label><select id="ip-type"><option value="dedicated">Dedicated</option><option value="shared">Shared</option></select></div><div class="form-group"><label>Stream</label><select id="ip-stream"><option value="optin">Opt-in</option><option value="engaged">Engaged</option><option value="cold">Cold</option></select></div></div>
+        <div class="form-group"><label>Daily Cap</label><input id="ip-cap" type="number" value="100"></div>
+        <div class="form-group"><label>Assign to Pool</label><select id="ip-pool"><option value="">None</option></select></div>
+        <div class="btn-row"><button class="btn btn-primary" onclick="addIP()">Add IP</button><button class="btn btn-secondary" onclick="closeModal('ip-modal')">Cancel</button></div>
     </div></div>
 
     <div class="modal-overlay" id="sup-bulk-modal"><div class="modal"><h2>Bulk Suppress — CSV Upload</h2>

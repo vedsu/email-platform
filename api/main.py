@@ -20,7 +20,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from api.routes import contacts, campaigns, lists, events, suppressions, webhooks, unsubscribe, cleaning, dashboard, ai, auth, templates, reports, csv_ops
+from api.routes import contacts, campaigns, lists, events, suppressions, webhooks, unsubscribe, cleaning, dashboard, ai, auth, templates, reports, csv_ops, domains, ip_pools, admin
 
 app.include_router(contacts.router)
 app.include_router(campaigns.router)
@@ -36,6 +36,9 @@ app.include_router(auth.router)
 app.include_router(templates.router)
 app.include_router(reports.router)
 app.include_router(csv_ops.router)
+app.include_router(domains.router)
+app.include_router(ip_pools.router)
+app.include_router(admin.router)
 
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
