@@ -22,4 +22,9 @@ celery.conf.update(
 
 celery.autodiscover_tasks(["worker"])
 
-import worker.scheduler  # noqa: F401 — registers beat schedule
+celery.conf.beat_schedule = {
+    "check-scheduled-campaigns": {
+        "task": "check_scheduled_campaigns",
+        "schedule": 60.0,
+    },
+}

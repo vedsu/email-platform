@@ -2,7 +2,6 @@ from datetime import datetime
 from bson import ObjectId
 from worker.celery_app import celery
 from models.sync_db import get_sync_db
-from worker.tasks import send_to_recipient
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,6 +42,8 @@ def check_scheduled_campaigns():
             },
         )
 
+        from worker.tasks import send_to_recipient
+
         contacts = db.contacts.find(query, {"_id": 1})
         enqueued = 0
         for contact in contacts:
@@ -50,11 +51,3 @@ def check_scheduled_campaigns():
             enqueued += 1
 
         logger.info(f"Scheduled campaign {campaign_id}: enqueued {enqueued} recipients")
-
-
-celery.conf.beat_schedule = {
-    "check-scheduled-campaigns": {
-        "task": "check_scheduled_campaigns",
-        "schedule": 60.0,
-    },
-}
