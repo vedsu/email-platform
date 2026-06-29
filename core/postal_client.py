@@ -1,5 +1,8 @@
+import logging
 import httpx
 from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def send_message(
@@ -38,4 +41,8 @@ def send_message(
         timeout=30,
     )
     response.raise_for_status()
-    return response.json()
+    result = response.json()
+    logger.info(f"Postal response: {result}")
+    if result.get("status") != "success":
+        logger.error(f"Postal error: {result}")
+    return result

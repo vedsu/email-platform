@@ -83,6 +83,8 @@ def send_to_recipient(self, campaign_id: str, contact_id: str):
     text_body = render_template(campaign.get("text_body") or "", contact) or None
     subject = render_template(campaign["subject"], contact)
 
+    logger.info(f"Sending to {email} from {from_addr} ({campaign['from_name']})")
+
     # 5. Send via Postal
     try:
         result = send_message(
