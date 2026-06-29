@@ -187,7 +187,7 @@
             <!-- Lists -->
             <div id="page-lists" class="page">
                 <div class="card-header"><h2>Lists</h2><button class="btn btn-primary" onclick="openModal('list-modal')">Create List</button></div>
-                <div class="card"><table><thead><tr><th>Name</th><th>Type</th><th>Contacts</th><th>Created</th></tr></thead><tbody id="lists-tbody"></tbody></table></div>
+                <div class="card"><table><thead><tr><th>Name</th><th>Type</th><th>Contacts</th><th>Created</th><th>Actions</th></tr></thead><tbody id="lists-tbody"></tbody></table></div>
             </div>
 
             <!-- Templates -->
@@ -299,6 +299,16 @@
         <div class="form-group"><label>Name</label><input id="list-name"></div>
         <div class="form-group"><label>Description</label><input id="list-desc"></div>
         <div class="btn-row"><button class="btn btn-primary" onclick="createList()">Create</button><button class="btn btn-secondary" onclick="closeModal('list-modal')">Cancel</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="add-to-list-modal"><div class="modal"><h2>Add Contacts to List</h2>
+        <div class="form-group"><label>List</label><select id="atl-list" style="font-weight:600"></select></div>
+        <div class="tabs"><div class="tab active" onclick="switchATLTab('all',this)">Add All Contacts</div><div class="tab" onclick="switchATLTab('filter',this)">By Stream</div><div class="tab" onclick="switchATLTab('manual',this)">Manual</div></div>
+        <div id="atl-all-tab"><p class="text-muted">Add all active contacts to this list.</p></div>
+        <div id="atl-filter-tab" class="hidden"><div class="form-group"><label>Stream</label><select id="atl-stream"><option value="optin">Opt-in</option><option value="engaged">Engaged</option><option value="cold">Cold</option></select></div></div>
+        <div id="atl-manual-tab" class="hidden"><div class="form-group"><label>Emails (one per line or comma-separated)</label><textarea id="atl-emails" rows="4" placeholder="user1@example.com&#10;user2@example.com"></textarea></div></div>
+        <div class="btn-row"><button class="btn btn-primary" onclick="addContactsToList()">Add Contacts</button><button class="btn btn-secondary" onclick="closeModal('add-to-list-modal')">Cancel</button></div>
+        <div id="atl-result" class="mt-2"></div>
     </div></div>
 
     <div class="modal-overlay" id="template-modal"><div class="modal"><h2>Create Template</h2>

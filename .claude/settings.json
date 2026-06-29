@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Start-Sleep -Seconds 15; try { $r = Invoke-WebRequest -Uri \"http://crm.vedsupost.com:8000/health\" -UseBasicParsing -TimeoutSec 10; $r.Content } catch { $_.Exception.Message })"
+    ]
+  }
+}

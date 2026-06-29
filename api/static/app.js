@@ -260,7 +260,8 @@ async function loadLists() {
         <td>${l.name}</td><td>${l.list_type}</td><td>${l.contact_count}</td>
         <td>${new Date(l.created_at).toLocaleDateString()}</td>
         <td>
-            <button class="btn btn-danger btn-sm" onclick="deleteList('${l._id}','${l.name}',false)">Delete List</button>
+            <button class="btn btn-primary btn-sm" onclick="openAddToListModal('${l._id}','${l.name}')">Add Contacts</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteList('${l._id}','${l.name}',false)">Delete</button>
             <button class="btn btn-danger btn-sm" onclick="deleteList('${l._id}','${l.name}',true)">Delete + Contacts</button>
         </td>
     </tr>`).join('');
@@ -287,6 +288,45 @@ async function deleteList(listId, listName, deleteContacts) {
     toast(`List "${listName}" deleted`);
     loadLists();
     loadAllLists();
+}
+
+function openAddToListModal(listId, listName) {
+    const sel = document.getElementById('atl-list');
+    sel.innerHTML = `<option value="${listId}">${listName}</option>`;
+    document.getElementById('atl-result').innerHTML = '';
+    openModal('add-to-list-modal');
+}
+
+function switchATLTab(tab, el) {
+    document.querySelectorAll('#add-to-list-modal .tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('atl-all-tab').classList.toggle('hidden', tab !== 'all');
+    document.getElementById('atl-filter-tab').classList.toggle('hidden', tab !== 'filter');
+    document.getElementById('atl-manual-tab').classList.toggle('hidden', tab !== 'manual');
+}
+
+async function addContactsToList() {
+    const listId = document.getElementById('atl-list').value;
+    let emails = [];
+
+    if (!document.getElementById('atl-manual-tab').classList.contains('hidden')) {
+        const text = document.getElementById('atl-emails').value;
+        emails = text.split(/[\n,]/).map(e => e.trim()).filter(e => e && e.includes('@'));
+    } else if (!document.getElementById('atl-filter-tab').classList.contains('hidden')) {
+        const stream = document.getElementById('atl-stream').value;
+        const d = await api(`/contacts?stream=${stream}&limit=5000`);
+        emails = d.contacts.map(c => c.email);
+    } else {
+        const d = await api('/contacts?status=active&limit=5000');
+        emails = d.contacts.map(c => c.email);
+    }
+
+    if (emails.length === 0) return toast('No contacts found', 'error');
+
+    const d = await api(`/lists/${listId}/contacts`, { method: 'POST', body: JSON.stringify(emails) });
+    document.getElementById('atl-result').innerHTML = `<div class="import-success"><span class="badge active">Matched: ${d.matched}</span> <span class="badge blue">Added: ${d.modified}</span></div>`;
+    toast(`${d.modified} contacts added to list`);
+    loadLists();
 }
 
 // --- Templates ---
