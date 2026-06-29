@@ -30,7 +30,7 @@ async def system_health(admin: dict = Depends(require_admin)):
     try:
         import httpx
         resp = httpx.get(f"{settings.postal_api_url}", timeout=5)
-        postal_ok = resp.status_code in (200, 301, 302)
+        postal_ok = resp.status_code in (200, 301, 302, 403)
     except Exception:
         pass
 
