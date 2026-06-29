@@ -309,24 +309,28 @@ async function addContactsToList() {
     const listId = document.getElementById('atl-list').value;
     let emails = [];
 
-    if (!document.getElementById('atl-manual-tab').classList.contains('hidden')) {
-        const text = document.getElementById('atl-emails').value;
-        emails = text.split(/[\n,]/).map(e => e.trim()).filter(e => e && e.includes('@'));
-    } else if (!document.getElementById('atl-filter-tab').classList.contains('hidden')) {
-        const stream = document.getElementById('atl-stream').value;
-        const d = await api(`/contacts?stream=${stream}&limit=5000`);
-        emails = d.contacts.map(c => c.email);
-    } else {
-        const d = await api('/contacts?status=active&limit=5000');
-        emails = d.contacts.map(c => c.email);
+    try {
+        if (!document.getElementById('atl-manual-tab').classList.contains('hidden')) {
+            const text = document.getElementById('atl-emails').value;
+            emails = text.split(/[\n,]/).map(e => e.trim()).filter(e => e && e.includes('@'));
+        } else if (!document.getElementById('atl-filter-tab').classList.contains('hidden')) {
+            const stream = document.getElementById('atl-stream').value;
+            const d = await api(`/contacts?stream=${stream}&limit=5000`);
+            emails = d.contacts.map(c => c.email);
+        } else {
+            const d = await api('/contacts?limit=5000');
+            emails = d.contacts.map(c => c.email);
+        }
+
+        if (emails.length === 0) return toast('No contacts found', 'error');
+
+        const d = await api(`/lists/${listId}/contacts`, { method: 'POST', body: JSON.stringify(emails) });
+        document.getElementById('atl-result').innerHTML = `<div class="import-success"><span class="badge active">Matched: ${d.matched}</span> <span class="badge active">Added: ${d.modified}</span></div>`;
+        toast(`${d.modified} contacts added to list`);
+        loadLists();
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
     }
-
-    if (emails.length === 0) return toast('No contacts found', 'error');
-
-    const d = await api(`/lists/${listId}/contacts`, { method: 'POST', body: JSON.stringify(emails) });
-    document.getElementById('atl-result').innerHTML = `<div class="import-success"><span class="badge active">Matched: ${d.matched}</span> <span class="badge blue">Added: ${d.modified}</span></div>`;
-    toast(`${d.modified} contacts added to list`);
-    loadLists();
 }
 
 // --- Templates ---

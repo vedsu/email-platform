@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(Start-Sleep -Seconds 15; try { $r = Invoke-WebRequest -Uri \"http://crm.vedsupost.com:8000/health\" -UseBasicParsing -TimeoutSec 10; $r.Content } catch { $_.Exception.Message })"
+      "PowerShell(Start-Sleep -Seconds 15; try { $r = Invoke-WebRequest -Uri \"http://crm.vedsupost.com:8000/health\" -UseBasicParsing -TimeoutSec 10; $r.Content } catch { $_.Exception.Message })",
+      "PowerShell(ssh ubuntu@ns5038770.ip-148-113-228.net \"cd ~/email-platform && git pull\")",
+      "PowerShell(ssh ubuntu@ns5038770.ip-148-113-228.net \"pkill -f uvicorn; sleep 2 && cd /home/ubuntu/email-platform && nohup /home/ubuntu/email-platform/.venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 4 > /tmp/fastapi.log 2>&1 & echo restarted\")",
+      "PowerShell(ssh ubuntu@ns5038770.ip-148-113-228.net \"pkill -f uvicorn\")",
+      "PowerShell(Start-Sleep -Seconds 12; try { $r = Invoke-WebRequest -Uri \"http://crm.vedsupost.com:8000/static/app.js\" -UseBasicParsing -TimeoutSec 10; \"app.js size: $\\($r.Content.Length\\) chars\"; if \\($r.Content -match \"openAddToListModal\"\\) { \"Add Contacts feature: PRESENT\" } else { \"Add Contacts feature: MISSING\" } } catch { $_.Exception.Message })",
+      "PowerShell(try { $body = '{\"email\":\"admin@vedsupost.com\",\"password\":\"admin123\"}'; $r = Invoke-WebRequest -Uri \"http://crm.vedsupost.com:8000/auth/login\" -Method POST -Body $body -ContentType \"application/json\" -UseBasicParsing; $token = \\($r.Content | ConvertFrom-Json\\).access_token; $h = @{Authorization = \"Bearer $token\"}; $r2 = Invoke-WebRequest -Uri \"http://crm.vedsupost.com:8000/lists\" -Headers $h -UseBasicParsing; $r2.Content } catch { $_.ErrorDetails.Message })"
     ]
   }
 }
