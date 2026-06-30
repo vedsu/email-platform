@@ -61,7 +61,14 @@ function doLogout() {
 async function showApp() {
     document.getElementById('login-page').style.display = 'none';
     document.getElementById('app').classList.remove('hidden');
-    document.getElementById('sidebar-user').textContent = USER ? `${USER.name} (${USER.role})` : '';
+    // Top bar user badge
+    if (USER) {
+        document.getElementById('top-user-name').textContent = USER.name;
+        const roleEl = document.getElementById('top-user-role');
+        roleEl.textContent = USER.role;
+        roleEl.className = `role-chip ${USER.role}`;
+    }
+    document.getElementById('sidebar-user').textContent = USER?.email || '';
     if (USER?.role === 'admin') document.getElementById('admin-nav').classList.remove('hidden');
     else document.getElementById('admin-nav').classList.add('hidden');
     try { await loadAllLists(); } catch(e) { console.warn('loadAllLists failed:', e); }
@@ -187,12 +194,13 @@ async function loadContactLists() {
     const filtered = ALL_LISTS.filter(l => !search || l.name.toLowerCase().includes(search));
     document.getElementById('cl-tbody').innerHTML = filtered.length
         ? filtered.map(l => {
-            const stream = l.stream || l.list_type || 'import';
+            const stream = l.stream || 'import';
             const badgeClass = stream === 'optin' ? 'optin' : stream === 'engaged' ? 'engaged' : stream === 'cold' ? 'cold' : 'draft';
             return `<tr>
                 <td><strong>${l.name}</strong></td>
                 <td class="text-muted">${l.source_file || '—'}</td>
-                <td>${l.contact_count || 0}</td>
+                <td class="text-muted">${l.batch_number ? `${l.batch_number} / ${l.total_batches || l.batch_number}` : '—'}</td>
+                <td>${(l.contact_count || 0).toLocaleString()}</td>
                 <td><span class="badge ${badgeClass}">${stream}</span></td>
                 <td>${new Date(l.created_at).toLocaleDateString()}</td>
                 <td>
@@ -202,7 +210,7 @@ async function loadContactLists() {
                 </td>
             </tr>`;
           }).join('')
-        : '<tr><td colspan="6" style="text-align:center;padding:24px;color:#888">No lists found. Upload a CSV to get started.</td></tr>';
+        : '<tr><td colspan="7" style="text-align:center;padding:24px;color:#888">No lists found. Upload a CSV to get started.</td></tr>';
 }
 
 async function viewListContacts(listId, listName, total) {
@@ -557,16 +565,31 @@ async function loadCampaigns() {
 
 async function openCampaignModal() {
     await loadAllLists();
-    // Populate template selector
     const tplData = await api('/templates');
     const tplSel = document.getElementById('camp-tpl');
     tplSel.innerHTML = '<option value="">— None (custom) —</option>' + tplData.templates.map(t => `<option value="${t._id}" data-subject="${t.subject}" data-preheader="${t.preheader||''}" data-html="${encodeURIComponent(t.html_body)}">${t.name}</option>`).join('');
-
-    // Populate list multi-select
-    const listOpts = ALL_LISTS.map(l => ({ value: l._id, label: `${l.name} (${l.contact_count})` }));
-    createMultiSelect('camp-lists-ms', listOpts, 'Select target lists...');
-
+    filterCampLists();
     openModal('campaign-modal');
+}
+
+function filterCampLists() {
+    const stream = document.getElementById('camp-stream').value;
+    const domainMap = { optin: 'mail.webinarsorbit.com', engaged: 'eng.webinarsorbit.com', cold: 'out.webinarsorbit.com' };
+    document.getElementById('camp-from-email').value = `hello@${domainMap[stream] || 'mail.webinarsorbit.com'}`;
+
+    const filtered = ALL_LISTS.filter(l => l.stream === stream);
+    const listOpts = filtered.map(l => ({ value: l._id, label: `${l.name} (${(l.contact_count||0).toLocaleString()})` }));
+    createMultiSelect('camp-lists-ms', listOpts, `Select ${stream} lists...`);
+
+    const totalContacts = filtered.reduce((s, l) => s + (l.contact_count || 0), 0);
+    document.getElementById('camp-lists-info').textContent = filtered.length
+        ? `${filtered.length} list${filtered.length > 1 ? 's' : ''} available — ${totalContacts.toLocaleString()} total contacts`
+        : `No ${stream} lists found. Upload a CSV with ${stream} stream first.`;
+}
+
+function selectAllCampLists() {
+    document.querySelectorAll('#camp-lists-ms input[type="checkbox"]').forEach(c => c.checked = true);
+    updateMultiSelectDisplay('camp-lists-ms', 'Select target lists...');
 }
 
 function onTemplateSelect() {
@@ -664,17 +687,77 @@ async function loadCampaignReport() {
     if (!id) { document.getElementById('report-detail').innerHTML = ''; return; }
     const d = await api('/reports/campaign/' + id);
     const s = d.stats || {};
+    const r = d.rates || {};
     document.getElementById('report-detail').innerHTML = `
-        <div class="stats-grid">
-            <div class="stat-card"><div class="label">Sent</div><div class="value">${s.sent||0}</div></div>
-            <div class="stat-card"><div class="label">Delivered</div><div class="value green">${s.delivered||0}</div></div>
-            <div class="stat-card"><div class="label">Opened</div><div class="value blue">${s.opened||0}</div></div>
-            <div class="stat-card"><div class="label">Clicked</div><div class="value blue">${s.clicked||0}</div></div>
-            <div class="stat-card"><div class="label">Bounced</div><div class="value orange">${s.bounced||0}</div></div>
-            <div class="stat-card"><div class="label">Complained</div><div class="value red">${s.complained||0}</div></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <span class="badge ${d.status}">${d.status}</span>
+            <span class="badge ${d.stream}">${d.stream}</span>
+            ${d.started_at ? `<span class="text-muted">Started: ${new Date(d.started_at).toLocaleString()}</span>` : ''}
+            ${d.completed_at ? `<span class="text-muted">Completed: ${new Date(d.completed_at).toLocaleString()}</span>` : ''}
         </div>
-        <p class="text-muted">Open: ${d.rates?.open_rate} | Click: ${d.rates?.click_rate} | Bounce: ${d.rates?.bounce_rate}</p>
-        <button class="btn btn-secondary btn-sm mt-2" onclick="exportCSV('campaign/${id}')">Export CSV</button>`;
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">
+            <div class="stat-card">
+                <div class="label">Sent</div>
+                <div class="value blue">${(s.sent||0).toLocaleString()}</div>
+                <div class="rate">of ${(s.total_recipients||0).toLocaleString()} recipients</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Delivered</div>
+                <div class="value green">${(s.delivered||0).toLocaleString()}</div>
+                <div class="rate">${r.delivery_rate||'0%'}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Opened</div>
+                <div class="value green">${(s.opened||0).toLocaleString()}</div>
+                <div class="rate">${r.open_rate||'0%'}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Clicked</div>
+                <div class="value blue">${(s.clicked||0).toLocaleString()}</div>
+                <div class="rate">${r.click_rate||'0%'}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Bounced</div>
+                <div class="value orange">${(s.bounced||0).toLocaleString()}</div>
+                <div class="rate">${r.bounce_rate||'0%'}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Unsubscribed</div>
+                <div class="value red">${(s.unsubscribed||0).toLocaleString()}</div>
+                <div class="rate">${r.unsubscribe_rate||'0%'}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Complaints</div>
+                <div class="value red">${(s.complained||0).toLocaleString()}</div>
+                <div class="rate">${r.complaint_rate||'0%'}</div>
+            </div>
+        </div>
+        <div class="btn-row mt-2">
+            <button class="btn btn-secondary btn-sm" onclick="exportCSV('campaign/${id}')">Export CSV</button>
+            <button class="btn btn-primary btn-sm" onclick="loadRecipientList('${id}','opened')">Who Opened</button>
+            <button class="btn btn-success btn-sm" onclick="loadRecipientList('${id}','clicked')">Who Clicked</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadRecipientList('${id}','bounced')">Bounced</button>
+            <button class="btn btn-danger btn-sm" onclick="loadRecipientList('${id}','complained')">Complaints</button>
+        </div>
+        <div id="recipient-list-${id}" class="mt-2"></div>`;
+}
+
+async function loadRecipientList(campaignId, eventType) {
+    const el = document.getElementById(`recipient-list-${campaignId}`);
+    el.innerHTML = '<span class="loading"></span>';
+    const d = await api(`/reports/campaign/${campaignId}/recipients?event_type=${eventType}&limit=100`);
+    const label = { opened: 'Opened', clicked: 'Clicked', bounced: 'Bounced', complained: 'Complaints' }[eventType] || eventType;
+    el.innerHTML = `<div class="card mt-2">
+        <h2 style="font-size:14px;margin-bottom:12px">${label} — ${d.total} contacts</h2>
+        ${d.events.length ? `<table>
+            <thead><tr><th>Email</th><th>Date</th></tr></thead>
+            <tbody>${d.events.map(e=>`<tr>
+                <td>${e.email}</td>
+                <td class="text-muted">${new Date(e.created_at).toLocaleString()}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+        ${d.total > 100 ? `<p class="text-muted mt-1">Showing first 100 of ${d.total}. Export CSV for full list.</p>` : ''}` : '<p class="text-muted">No records found.</p>'}
+    </div>`;
 }
 
 async function loadContactReport() {

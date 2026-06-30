@@ -166,6 +166,19 @@
         /* ── Import result ────────────────────────────── */
         .import-success { padding: 14px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; margin-top: 12px; line-height: 1.8; }
 
+        /* ── Top bar (user badge) ─────────────────────── */
+        .top-bar { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 10px 28px; margin: -28px -28px 24px; display: flex; justify-content: flex-end; align-items: center; gap: 12px; min-height: 48px; }
+        .user-badge { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #374151; font-weight: 500; }
+        .user-badge .role-chip { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; }
+        .role-chip.admin { background: #fae8ff; color: #86198f; }
+        .role-chip.member { background: #e0e7ff; color: #4338ca; }
+
+        /* ── Campaign lists info ───────────────────────── */
+        .lists-info { font-size: 12px; color: #6b7280; margin-top: 5px; }
+
+        /* ── Report rate cards ─────────────────────────── */
+        .stat-card .rate { font-size: 12px; color: #6b7280; margin-top: 3px; font-weight: 500; }
+
         /* ── Misc ─────────────────────────────────────── */
         .loading { display: inline-block; width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -227,6 +240,9 @@
         </nav>
 
         <div class="main">
+            <!-- Top bar -->
+            <div class="top-bar"><div class="user-badge"><span id="top-user-name"></span><span id="top-user-role" class="role-chip"></span></div></div>
+
             <!-- Dashboard -->
             <div id="page-dashboard" class="page active">
                 <h2 class="mb-2">Dashboard</h2>
@@ -265,7 +281,7 @@
                         <input type="search" id="cl-search" placeholder="Search lists by name..." oninput="loadContactLists()" style="min-width:260px">
                     </div>
                     <div class="card" style="padding:0;overflow:hidden">
-                        <table><thead><tr><th>List Name</th><th>Source File</th><th>Total Contacts</th><th>Stream</th><th>Created</th><th>Actions</th></tr></thead>
+                        <table><thead><tr><th>List Name</th><th>Source File</th><th>Batch #</th><th>Total Contacts</th><th>Stream</th><th>Created</th><th>Actions</th></tr></thead>
                         <tbody id="cl-tbody"></tbody></table>
                     </div>
                 </div>
@@ -480,8 +496,15 @@
         <div class="form-group"><label>Subject</label><input id="camp-subject" placeholder="Hello {{first_name}}!"></div>
         <div class="form-group"><label>Preheader</label><input id="camp-preheader"></div>
         <div class="form-row"><div class="form-group"><label>From Name</label><input id="camp-from-name" value="Dev Team"></div><div class="form-group"><label>From Email</label><input id="camp-from-email" value="hello@mail.localhost"></div></div>
-        <div class="form-row"><div class="form-group"><label>Stream</label><select id="camp-stream"><option value="cold">Cold</option><option value="optin">Opt-in</option><option value="engaged">Engaged</option></select></div><div class="form-group"><label>Schedule (optional)</label><input id="camp-schedule" type="datetime-local"></div></div>
-        <div class="form-group"><label>Target Lists</label><div id="camp-lists-ms"></div></div>
+        <div class="form-row"><div class="form-group"><label>Stream</label><select id="camp-stream" onchange="filterCampLists()"><option value="cold">Cold</option><option value="optin">Opt-in</option><option value="engaged">Engaged</option></select></div><div class="form-group"><label>Schedule (optional)</label><input id="camp-schedule" type="datetime-local"></div></div>
+        <div class="form-group">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+                <label style="margin:0">Target Lists</label>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllCampLists()">Select All</button>
+            </div>
+            <div id="camp-lists-ms"></div>
+            <div id="camp-lists-info" class="lists-info"></div>
+        </div>
         <div class="form-group"><label>HTML Body</label><textarea id="camp-html" rows="6"></textarea></div>
         <div class="btn-row"><button class="btn btn-primary" onclick="createCampaign()">Create</button><button class="btn btn-secondary" onclick="closeModal('campaign-modal')">Cancel</button></div>
     </div></div>
