@@ -96,17 +96,45 @@ def send_to_recipient(self, campaign_id: str, contact_id: str):
             text_body=text_body,
             tag=campaign_id,
         )
-        postal_message_id = result.get("data", {}).get("messages", {}).get(email, {}).get("id")
     except Exception as exc:
         logger.error(f"Postal send failed for {email}: {exc}")
         raise self.retry(exc=exc)
+
+    now = datetime.utcnow()
+
+    # If Postal returned an application-level error, record as bounce
+    if result.get("status") != "success":
+        error_data = result.get("data", {})
+        error_code = error_data.get("code", "UnknownError")
+        error_msg = error_data.get("message", str(result))
+        bounce_message = f"{error_code}: {error_msg}"
+        logger.error(f"Postal rejected {email}: {bounce_message}")
+        db.events.insert_one({
+            "campaign_id": campaign_id,
+            "contact_id": contact_id,
+            "email": email,
+            "event_type": "bounced",
+            "stream": stream,
+            "postal_message_id": None,
+            "bounce_type": "hard",
+            "bounce_message": bounce_message,
+            "metadata": {},
+            "created_at": now,
+        })
+        db.campaigns.update_one(
+            {"_id": ObjectId(campaign_id)},
+            {"$inc": {"stats.bounced": 1}},
+        )
+        _check_campaign_completion(db, campaign_id)
+        return {"status": "bounced", "email": email, "reason": bounce_message}
+
+    postal_message_id = result.get("data", {}).get("messages", {}).get(email, {}).get("id")
 
     # 6. Increment counters
     increment_send_count(stream)
     increment_domain_count(email)
 
     # 7. Record sent event
-    now = datetime.utcnow()
     db.events.insert_one({
         "campaign_id": campaign_id,
         "contact_id": contact_id,
