@@ -24,6 +24,7 @@ EVENT_MAP = {
 @router.post("/postal")
 async def postal_webhook(request: Request):
     payload = await request.json()
+    logger.info(f"Postal webhook received: {payload}")
 
     event_type = payload.get("event")
     mapped_type = EVENT_MAP.get(event_type)
@@ -72,11 +73,14 @@ async def postal_webhook(request: Request):
     await db.events.insert_one(event_doc)
 
     if tag:
-        stat_field = f"stats.{mapped_type}"
-        await db.campaigns.update_one(
-            {"_id": ObjectId(tag)},
-            {"$inc": {stat_field: 1}},
-        )
+        try:
+            stat_field = f"stats.{mapped_type}"
+            await db.campaigns.update_one(
+                {"_id": ObjectId(tag)},
+                {"$inc": {stat_field: 1}},
+            )
+        except Exception as e:
+            logger.warning(f"Could not update campaign stats for tag={tag!r}: {e}")
 
     if mapped_type == "opened" and contact:
         await db.contacts.update_one(
