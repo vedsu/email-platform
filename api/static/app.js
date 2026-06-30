@@ -613,16 +613,37 @@ async function loadUsers() {
         <td>${u.email}</td><td>${u.name}</td><td><span class="badge ${u.role}">${u.role}</span></td>
         <td>${u.is_active !== false ? '<span class="badge active">Yes</span>' : '<span class="badge suppressed">No</span>'}</td>
         <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleString() : 'Never'}</td>
-        <td><button class="btn btn-secondary btn-sm" onclick="resetPassword('${u._id}')">Reset PW</button></td>
+        <td>
+            <button class="btn btn-secondary btn-sm" onclick="openResetPasswordModal('${u._id}', '${u.email}')">Reset PW</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteUser('${u._id}', '${u.email}')">Delete</button>
+        </td>
     </tr>`).join('');
 }
 async function createUser() {
     await api('/auth/users', {method:'POST', body:JSON.stringify({email:document.getElementById('usr-email').value, name:document.getElementById('usr-name').value, password:document.getElementById('usr-pass').value, role:document.getElementById('usr-role').value})});
     closeModal('user-modal'); toast('User created'); loadUsers();
 }
-async function resetPassword(id) {
-    const d = await api('/auth/users/'+id+'/reset-password', {method:'POST'});
-    toast('New password: ' + d.new_password, 'warning');
+function openResetPasswordModal(id, email) {
+    document.getElementById('reset-pw-user-id').value = id;
+    document.getElementById('reset-pw-label').textContent = 'Reset password for: ' + email;
+    document.getElementById('reset-pw-new').value = '';
+    document.getElementById('reset-pw-confirm').value = '';
+    openModal('reset-pw-modal');
+}
+async function confirmResetPassword() {
+    const id = document.getElementById('reset-pw-user-id').value;
+    const newPw = document.getElementById('reset-pw-new').value;
+    const confirmPw = document.getElementById('reset-pw-confirm').value;
+    if (!newPw) return toast('Enter a new password', 'error');
+    if (newPw !== confirmPw) return toast('Passwords do not match', 'error');
+    if (newPw.length < 6) return toast('Password must be at least 6 characters', 'error');
+    await api('/auth/users/'+id+'/reset-password', {method:'POST', body:JSON.stringify({new_password:newPw})});
+    closeModal('reset-pw-modal'); toast('Password updated');
+}
+async function deleteUser(id, email) {
+    if (!confirm('Delete user ' + email + '? This cannot be undone.')) return;
+    await api('/auth/users/'+id, {method:'DELETE'});
+    toast('User deleted'); loadUsers();
 }
 
 // --- CSV Export ---

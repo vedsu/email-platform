@@ -131,17 +131,35 @@ async def update_user(user_id: str, updates: dict, admin: dict = Depends(require
     return {"updated": True}
 
 
+class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+
 @router.post("/users/{user_id}/reset-password")
-async def reset_user_password(user_id: str, admin: dict = Depends(require_admin)):
+async def reset_user_password(user_id: str, payload: ResetPasswordRequest, admin: dict = Depends(require_admin)):
     from bson import ObjectId
-    import secrets
     db = get_db()
-    new_password = secrets.token_urlsafe(12)
-    await db.users.update_one(
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    result = await db.users.update_one(
         {"_id": ObjectId(user_id)},
-        {"$set": {"password_hash": hash_password(new_password), "updated_at": datetime.utcnow()}},
+        {"$set": {"password_hash": hash_password(payload.new_password), "updated_at": datetime.utcnow()}},
     )
-    return {"new_password": new_password}
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "password_reset"}
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: str, admin: dict = Depends(require_admin)):
+    from bson import ObjectId
+    db = get_db()
+    if str(admin["id"]) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    result = await db.users.delete_one({"_id": ObjectId(user_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"deleted": True}
 
 
 @router.post("/setup")
