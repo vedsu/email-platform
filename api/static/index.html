@@ -118,6 +118,29 @@
 
         /* Import success */
         .import-success { padding: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; margin-top: 8px; }
+
+        /* Page header (FlyNet style) */
+        .page-header { background: #fff; padding: 20px 24px; margin: -24px -24px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+        .page-header-left h2 { font-size: 20px; font-weight: 700; color: #111827; }
+        .page-header-left p { font-size: 13px; color: #6b7280; margin-top: 3px; }
+        .page-header-right { display: flex; gap: 8px; align-items: center; }
+
+        /* Upload form */
+        .upload-form { background: #fff; border-radius: 8px; padding: 28px; max-width: 680px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .upload-hint { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 10px 14px; font-size: 12px; margin-top: 16px; line-height: 1.6; }
+        .upload-hint strong { color: #92400e; }
+
+        /* Option rows (split / duplicate) */
+        .option-toggle { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; cursor: pointer; font-size: 13px; color: #374151; }
+        .option-toggle input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; }
+        .option-sub { margin-left: 24px; }
+        .radio-group { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+        .radio-group label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #374151; cursor: pointer; font-weight: normal; }
+        .radio-group input[type="radio"] { width: auto; margin: 2px 0 0; cursor: pointer; }
+        .radio-group .radio-desc { font-size: 11px; color: #888; margin-top: 1px; }
+
+        /* Contact Lists table action buttons */
+        td .btn + .btn { margin-left: 4px; }
     </style>
 </head>
 <body>
@@ -141,8 +164,7 @@
             </div>
             <a href="#" data-page="dashboard" class="active">Dashboard</a>
             <div class="section-label">Manage</div>
-            <a href="#" data-page="contacts">Contacts</a>
-            <a href="#" data-page="lists">Lists</a>
+            <a href="#" data-page="contactlists">Contact Lists</a>
             <a href="#" data-page="templates">Templates</a>
             <a href="#" data-page="campaigns">Campaigns</a>
             <a href="#" data-page="suppressions">Suppressions</a>
@@ -188,6 +210,97 @@
             <div id="page-lists" class="page">
                 <div class="card-header"><h2>Lists</h2><button class="btn btn-primary" onclick="openModal('list-modal')">Create List</button></div>
                 <div class="card"><table><thead><tr><th>Name</th><th>Type</th><th>Contacts</th><th>Created</th><th>Actions</th></tr></thead><tbody id="lists-tbody"></tbody></table></div>
+            </div>
+
+            <!-- Contact Lists -->
+            <div id="page-contactlists" class="page">
+
+                <!-- View 1: List table -->
+                <div id="cl-list-view">
+                    <div class="page-header">
+                        <div class="page-header-left"><h2>Contact Lists</h2><p>View uploaded contact batches and campaign-ready lists.</p></div>
+                        <div class="page-header-right"><button class="btn btn-primary" onclick="showCLView('upload')">Upload CSV</button></div>
+                    </div>
+                    <div class="filter-bar">
+                        <input type="search" id="cl-search" placeholder="Search lists by name..." oninput="loadContactLists()" style="min-width:260px">
+                    </div>
+                    <div class="card" style="padding:0;overflow:hidden">
+                        <table><thead><tr><th>List Name</th><th>Source File</th><th>Total Contacts</th><th>Stream</th><th>Created</th><th>Actions</th></tr></thead>
+                        <tbody id="cl-tbody"></tbody></table>
+                    </div>
+                </div>
+
+                <!-- View 2: Upload form -->
+                <div id="cl-upload-view" class="hidden">
+                    <div class="page-header">
+                        <div class="page-header-left"><h2>Upload Contacts</h2><p>Upload a CSV and optionally split it into smaller campaign lists.</p></div>
+                        <div class="page-header-right"><button class="btn btn-secondary" onclick="showCLView('list')">Back to Contact Lists</button></div>
+                    </div>
+                    <div class="upload-form">
+                        <div class="form-group"><label>CSV File</label><input type="file" id="cl-csv-file" accept=".csv"></div>
+                        <div class="form-group">
+                            <label>List Name</label>
+                            <input id="cl-list-name" placeholder="e.g. excel_webinar (leave blank to use filename)">
+                            <div class="text-muted mt-1">If blank, filename will be used. Example: leads.csv → leads</div>
+                        </div>
+                        <div class="form-group"><label>Stream</label>
+                            <select id="cl-stream"><option value="cold">Cold</option><option value="optin">Opt-in</option><option value="engaged">Engaged</option></select>
+                        </div>
+
+                        <!-- Split option -->
+                        <div class="form-group">
+                            <label>Split into Batches</label>
+                            <label class="option-toggle"><input type="checkbox" id="cl-split-check" onchange="toggleCLSplit()"> Split this CSV into multiple lists</label>
+                            <div id="cl-split-sub" class="option-sub hidden">
+                                <div class="form-group" style="margin-bottom:0">
+                                    <label>Contacts per batch</label>
+                                    <input type="number" id="cl-split-size" value="10000" min="100" style="max-width:160px">
+                                    <div class="text-muted mt-1">Example: 10000 → each list gets max 10,000 contacts (leads_1, leads_2 …)</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Duplicate option -->
+                        <div class="form-group">
+                            <label>If Email Already Exists in System</label>
+                            <div class="radio-group">
+                                <label><input type="radio" name="cl-dup" value="skip" checked>
+                                    <div><span>Skip</span><div class="radio-desc">Don't import — show count of skipped emails in result</div></div>
+                                </label>
+                                <label><input type="radio" name="cl-dup" value="add_to_list">
+                                    <div><span>Add to this list</span><div class="radio-desc">Contact already exists — just add them to this new list (no duplicate contact created)</div></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="btn-row">
+                            <button class="btn btn-primary" id="cl-upload-btn" onclick="uploadAndSplit(this)">Upload and Import</button>
+                            <button class="btn btn-secondary" onclick="showCLView('list')">Cancel</button>
+                        </div>
+                        <div id="cl-upload-result" class="mt-2"></div>
+                        <div class="upload-hint"><strong>CSV format:</strong> minimum column required is <strong>email</strong>. Optional: first_name, last_name, full_name, phone, company, designation, city, country.</div>
+                    </div>
+                </div>
+
+                <!-- View 3: Contacts in list -->
+                <div id="cl-contact-view" class="hidden">
+                    <div class="page-header">
+                        <div class="page-header-left"><h2 id="cl-view-title">List Name</h2><p id="cl-view-subtitle"></p></div>
+                        <div class="page-header-right">
+                            <button id="cl-export-btn" class="btn btn-success">Export CSV</button>
+                            <button class="btn btn-secondary" onclick="showCLView('list')">Back to Contact Lists</button>
+                        </div>
+                    </div>
+                    <div class="filter-bar">
+                        <input type="search" id="cl-contact-search" placeholder="Search by email..." oninput="clContactsPage=0;loadCLContacts()" style="min-width:260px">
+                    </div>
+                    <div class="card" style="padding:0;overflow:hidden">
+                        <table><thead><tr><th>Email</th><th>Name</th><th>Phone</th><th>Company</th><th>City</th><th>Status</th></tr></thead>
+                        <tbody id="cl-contacts-tbody"></tbody></table>
+                    </div>
+                    <div id="cl-contacts-info" class="text-muted mt-1" style="padding:6px 2px;display:flex;gap:8px;align-items:center"></div>
+                </div>
+
             </div>
 
             <!-- Templates -->

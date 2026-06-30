@@ -81,7 +81,7 @@ document.querySelectorAll('.sidebar a[data-page]').forEach(link => {
 });
 
 function loadPage(p) {
-    const m = { dashboard: loadDashboard, contacts: loadContacts, lists: loadLists, templates: loadTemplates, campaigns: loadCampaigns, suppressions: loadSuppressions, reports: loadReports, cleaning: ()=>{}, ai: loadAI, users: loadUsers, domains: loadDomains, ippools: loadIPPools, admin: loadAdmin };
+    const m = { dashboard: loadDashboard, contactlists: loadContactLists, contacts: loadContacts, lists: loadLists, templates: loadTemplates, campaigns: loadCampaigns, suppressions: loadSuppressions, reports: loadReports, cleaning: ()=>{}, ai: loadAI, users: loadUsers, domains: loadDomains, ippools: loadIPPools, admin: loadAdmin };
     if (m[p]) m[p]();
 }
 
@@ -154,6 +154,161 @@ async function loadDashboard() {
     document.getElementById('dash-streams').innerHTML = Object.keys(st).length
         ? `<table><thead><tr><th>Stream</th><th>Active</th></tr></thead><tbody>${Object.entries(st).map(([s,n])=>`<tr><td><span class="badge ${s}">${s}</span></td><td>${n}</td></tr>`).join('')}</tbody></table>`
         : '<p class="text-muted">No contacts</p>';
+}
+
+// --- Contact Lists ---
+let clContactsPage = 0;
+let currentListId = null;
+let currentListName = null;
+const CL_PER_PAGE = 50;
+
+function showCLView(view) {
+    ['list', 'upload', 'contact'].forEach(v =>
+        document.getElementById('cl-' + v + '-view').classList.toggle('hidden', v !== view)
+    );
+    if (view === 'list') loadContactLists();
+    if (view === 'upload') {
+        document.getElementById('cl-upload-result').innerHTML = '';
+        document.getElementById('cl-csv-file').value = '';
+        document.getElementById('cl-list-name').value = '';
+        document.getElementById('cl-split-check').checked = false;
+        document.getElementById('cl-split-sub').classList.add('hidden');
+        document.querySelector('input[name="cl-dup"][value="skip"]').checked = true;
+    }
+}
+
+function toggleCLSplit() {
+    document.getElementById('cl-split-sub').classList.toggle('hidden', !document.getElementById('cl-split-check').checked);
+}
+
+async function loadContactLists() {
+    const search = (document.getElementById('cl-search')?.value || '').toLowerCase();
+    await loadAllLists();
+    const filtered = ALL_LISTS.filter(l => !search || l.name.toLowerCase().includes(search));
+    document.getElementById('cl-tbody').innerHTML = filtered.length
+        ? filtered.map(l => {
+            const stream = l.stream || l.list_type || 'import';
+            const badgeClass = stream === 'optin' ? 'optin' : stream === 'engaged' ? 'engaged' : stream === 'cold' ? 'cold' : 'draft';
+            return `<tr>
+                <td><strong>${l.name}</strong></td>
+                <td class="text-muted">${l.source_file || '—'}</td>
+                <td>${l.contact_count || 0}</td>
+                <td><span class="badge ${badgeClass}">${stream}</span></td>
+                <td>${new Date(l.created_at).toLocaleDateString()}</td>
+                <td>
+                    <button class="btn btn-secondary btn-sm" onclick="viewListContacts('${l._id}','${l.name}',${l.contact_count||0})">View</button>
+                    <button class="btn btn-success btn-sm" onclick="exportListCSV('${l._id}')">Export</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteCLList('${l._id}','${l.name}')">Delete</button>
+                </td>
+            </tr>`;
+          }).join('')
+        : '<tr><td colspan="6" style="text-align:center;padding:24px;color:#888">No lists found. Upload a CSV to get started.</td></tr>';
+}
+
+async function viewListContacts(listId, listName, total) {
+    currentListId = listId;
+    currentListName = listName;
+    clContactsPage = 0;
+    document.getElementById('cl-view-title').textContent = listName;
+    document.getElementById('cl-view-subtitle').textContent = `${total.toLocaleString()} contacts in this list`;
+    document.getElementById('cl-export-btn').onclick = () => exportListCSV(listId);
+    document.getElementById('cl-contact-search').value = '';
+    showCLView('contact');
+    await loadCLContacts();
+}
+
+async function loadCLContacts() {
+    const search = (document.getElementById('cl-contact-search')?.value || '').trim();
+    let url = `/contacts?limit=${CL_PER_PAGE}&skip=${clContactsPage * CL_PER_PAGE}&list_id=${currentListId}`;
+    if (search) url += '&search=' + encodeURIComponent(search);
+    const d = await api(url);
+    document.getElementById('cl-contacts-tbody').innerHTML = d.contacts.length
+        ? d.contacts.map(c => {
+            const attrs = c.attributes || {};
+            return `<tr>
+                <td>${c.email}</td>
+                <td>${[c.first_name, c.last_name].filter(Boolean).join(' ') || attrs.full_name || '—'}</td>
+                <td>${attrs.phone || '—'}</td>
+                <td>${attrs.company || '—'}</td>
+                <td>${attrs.city || '—'}</td>
+                <td><span class="badge ${c.status}">${c.status}</span></td>
+            </tr>`;
+          }).join('')
+        : '<tr><td colspan="6" style="text-align:center;padding:24px;color:#888">No contacts found</td></tr>';
+
+    const total = d.total;
+    const totalPages = Math.ceil(total / CL_PER_PAGE) || 1;
+    document.getElementById('cl-contacts-info').innerHTML =
+        `<span>Page ${clContactsPage + 1} of ${totalPages} — ${total.toLocaleString()} total</span>
+         ${clContactsPage > 0 ? `<button class="btn btn-secondary btn-sm" onclick="clContactsPage--;loadCLContacts()">Previous</button>` : ''}
+         ${clContactsPage < totalPages - 1 ? `<button class="btn btn-secondary btn-sm" onclick="clContactsPage++;loadCLContacts()">Next</button>` : ''}`;
+}
+
+function exportListCSV(listId) {
+    window.open('/csv/export-contacts?list_id=' + listId, '_blank');
+}
+
+async function deleteCLList(listId, listName) {
+    if (!confirm(`Delete list "${listName}"? Contacts will be kept but removed from this list.`)) return;
+    await api(`/lists/${listId}/delete`, { method: 'DELETE' });
+    toast(`List "${listName}" deleted`);
+    loadContactLists();
+}
+
+async function uploadAndSplit(btn) {
+    const file = document.getElementById('cl-csv-file').files[0];
+    if (!file) return toast('Please select a CSV file', 'error');
+
+    let name = document.getElementById('cl-list-name').value.trim();
+    if (!name) name = file.name.replace(/\.csv$/i, '').replace(/[^a-zA-Z0-9_\-]/g, '_');
+
+    const stream = document.getElementById('cl-stream').value;
+    const doSplit = document.getElementById('cl-split-check').checked;
+    const splitSize = parseInt(document.getElementById('cl-split-size').value) || 10000;
+    const dupAction = document.querySelector('input[name="cl-dup"]:checked').value;
+
+    const form = new FormData();
+    form.append('file', file);
+    form.append('name_prefix', name);
+    form.append('stream', stream);
+    form.append('do_split', doSplit);
+    form.append('split_size', splitSize);
+    form.append('duplicate_action', dupAction);
+
+    btn.disabled = true;
+    btn.textContent = 'Uploading…';
+    document.getElementById('cl-upload-result').innerHTML = '';
+
+    try {
+        const res = await fetch('/csv/upload-and-split', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + TOKEN },
+            body: form,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+        const dupLine = data.total_added_to_list > 0
+            ? `<span class="badge sending">Added to list: ${data.total_added_to_list}</span> `
+            : '';
+        document.getElementById('cl-upload-result').innerHTML = `
+            <div class="import-success">
+                <strong>Upload complete!</strong><br><br>
+                <span class="badge active">Imported: ${data.total_imported}</span>
+                ${dupLine}<span class="badge cold">Skipped: ${data.total_skipped}</span>
+                <span class="badge draft">Lists created: ${data.batches}</span>
+                <br><br>
+                ${data.lists.map(l => `<div style="font-size:12px;margin-top:4px">✓ <strong>${l.list_name}</strong> — ${l.imported} new, ${l.added_to_list} added to list, ${l.skipped} skipped</div>`).join('')}
+            </div>`;
+        toast(`${data.total_imported} contacts imported into ${data.batches} list(s)`);
+        await loadAllLists();
+    } catch (e) {
+        toast('Upload failed: ' + e.message, 'error');
+        document.getElementById('cl-upload-result').innerHTML = `<div style="color:red;font-size:13px;margin-top:8px">${e.message}</div>`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload and Import';
+    }
 }
 
 // --- Contacts ---

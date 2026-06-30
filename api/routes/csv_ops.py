@@ -70,6 +70,108 @@ async def csv_import_contacts(
     return {"imported": imported, "skipped": skipped, "errors": errors[:50]}
 
 
+@router.post("/upload-and-split")
+async def upload_and_split_contacts(
+    file: UploadFile = File(...),
+    name_prefix: str = Form(...),
+    stream: str = Form("cold"),
+    do_split: bool = Form(False),
+    split_size: int = Form(10000),
+    duplicate_action: str = Form("skip"),  # "skip" or "add_to_list"
+    user: dict = Depends(get_current_user),
+):
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+
+    content = await file.read()
+    text = content.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+    rows = [r for r in reader if r.get("email", "").strip()]
+    if not rows:
+        raise HTTPException(status_code=400, detail="CSV has no valid rows")
+
+    source_file = file.filename
+    db = get_db()
+    now = datetime.utcnow()
+
+    batches = [rows[i:i+int(split_size)] for i in range(0, len(rows), int(split_size))] if do_split else [rows]
+
+    results = []
+    for batch_num, batch_rows in enumerate(batches, 1):
+        list_name = f"{name_prefix}_{batch_num}" if len(batches) > 1 else name_prefix
+        from bson import ObjectId
+        list_doc = {
+            "name": list_name,
+            "description": f"Imported from {source_file}",
+            "list_type": "import",
+            "source_file": source_file,
+            "batch_number": batch_num,
+            "total_batches": len(batches),
+            "stream": stream,
+            "contact_count": 0,
+            "created_by": str(user.get("id", "")),
+            "created_at": now,
+            "updated_at": now,
+        }
+        list_result = await db.lists.insert_one(list_doc)
+        list_id = str(list_result.inserted_id)
+
+        imported = skipped = added_to_list = 0
+        for row in batch_rows:
+            email = row.get("email", "").strip().lower()
+            if not email or "@" not in email:
+                skipped += 1
+                continue
+
+            doc = {
+                "email": email,
+                "first_name": row.get("first_name", row.get("first name", "")).strip(),
+                "last_name": row.get("last_name", row.get("last name", "")).strip(),
+                "attributes": {
+                    k: v for k, v in row.items()
+                    if k not in ("email", "first_name", "last_name", "first name", "last name")
+                },
+                "stream": stream,
+                "status": "active",
+                "source": "import",
+                "list_ids": [list_id],
+                "engagement": {
+                    "last_sent_at": None, "last_opened_at": None, "last_clicked_at": None,
+                    "total_sent": 0, "total_opened": 0, "total_clicked": 0,
+                },
+                "created_at": now,
+                "updated_at": now,
+            }
+            try:
+                await db.contacts.insert_one(doc)
+                imported += 1
+            except Exception as e:
+                if "duplicate key" in str(e):
+                    if duplicate_action == "add_to_list":
+                        await db.contacts.update_one(
+                            {"email": email},
+                            {"$addToSet": {"list_ids": list_id}},
+                        )
+                        added_to_list += 1
+                    else:
+                        skipped += 1
+                else:
+                    skipped += 1
+
+        count = await db.contacts.count_documents({"list_ids": list_id})
+        await db.lists.update_one({"_id": list_result.inserted_id}, {"$set": {"contact_count": count}})
+        results.append({"list_name": list_name, "list_id": list_id, "imported": imported, "skipped": skipped, "added_to_list": added_to_list})
+
+    return {
+        "status": "success",
+        "total_imported": sum(r["imported"] for r in results),
+        "total_skipped": sum(r["skipped"] for r in results),
+        "total_added_to_list": sum(r["added_to_list"] for r in results),
+        "batches": len(batches),
+        "lists": results,
+    }
+
+
 @router.get("/export-contacts")
 async def csv_export_contacts(
     stream: Optional[str] = None,
