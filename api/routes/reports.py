@@ -23,8 +23,11 @@ async def campaign_report(campaign_id: str, user: dict = Depends(get_current_use
     async for doc in db.events.aggregate(event_pipeline):
         event_counts[doc["_id"]] = doc["count"]
 
-    total = campaign["stats"].get("sent", 1) or 1
     stats = campaign["stats"]
+    # Base rates on sent (emails that left) not total_recipients (includes skipped)
+    sent = stats.get("sent", 0) or 1
+
+    skipped = event_counts.get("skipped", 0)
 
     return {
         "campaign_id": campaign_id,
@@ -33,14 +36,14 @@ async def campaign_report(campaign_id: str, user: dict = Depends(get_current_use
         "status": campaign["status"],
         "started_at": campaign.get("started_at"),
         "completed_at": campaign.get("completed_at"),
-        "stats": stats,
+        "stats": {**stats, "skipped": skipped},
         "rates": {
-            "delivery_rate": f"{(stats.get('delivered', 0) / total) * 100:.1f}%",
-            "open_rate": f"{(stats.get('opened', 0) / total) * 100:.1f}%",
-            "click_rate": f"{(stats.get('clicked', 0) / total) * 100:.1f}%",
-            "bounce_rate": f"{(stats.get('bounced', 0) / total) * 100:.1f}%",
-            "complaint_rate": f"{(stats.get('complained', 0) / total) * 100:.1f}%",
-            "unsubscribe_rate": f"{(stats.get('unsubscribed', 0) / total) * 100:.1f}%",
+            "delivery_rate": f"{(stats.get('delivered', 0) / sent) * 100:.1f}%",
+            "open_rate": f"{(stats.get('opened', 0) / sent) * 100:.1f}%",
+            "click_rate": f"{(stats.get('clicked', 0) / sent) * 100:.1f}%",
+            "bounce_rate": f"{(stats.get('bounced', 0) / sent) * 100:.1f}%",
+            "complaint_rate": f"{(stats.get('complained', 0) / sent) * 100:.1f}%",
+            "unsubscribe_rate": f"{(stats.get('unsubscribed', 0) / sent) * 100:.1f}%",
         },
         "event_counts": event_counts,
     }

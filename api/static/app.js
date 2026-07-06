@@ -691,18 +691,29 @@ async function loadCampaignReport() {
     const d = await api('/reports/campaign/' + id);
     const s = d.stats || {};
     const r = d.rates || {};
+    const total = s.total_recipients || 0;
+    const processed = (s.sent||0) + (s.bounced||0) + (s.skipped||0);
+    const pct = total > 0 ? Math.min(100, Math.round(processed / total * 100)) : 0;
     document.getElementById('report-detail').innerHTML = `
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
             <span class="badge ${d.status}">${d.status}</span>
             <span class="badge ${d.stream}">${d.stream}</span>
             ${d.started_at ? `<span class="text-muted">Started: ${new Date(d.started_at).toLocaleString()}</span>` : ''}
             ${d.completed_at ? `<span class="text-muted">Completed: ${new Date(d.completed_at).toLocaleString()}</span>` : ''}
         </div>
-        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">
+        ${total > 0 ? `<div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px">
+                <span>Progress: ${processed} / ${total} processed</span><span>${pct}%</span>
+            </div>
+            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:var(--primary);border-radius:3px;transition:width .4s"></div>
+            </div>
+        </div>` : ''}
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
             <div class="stat-card">
                 <div class="label">Sent</div>
                 <div class="value blue">${(s.sent||0).toLocaleString()}</div>
-                <div class="rate">of ${(s.total_recipients||0).toLocaleString()} recipients</div>
+                <div class="rate">of ${total.toLocaleString()} total</div>
             </div>
             <div class="stat-card">
                 <div class="label">Delivered</div>
@@ -725,6 +736,11 @@ async function loadCampaignReport() {
                 <div class="rate">${r.bounce_rate||'0%'}</div>
             </div>
             <div class="stat-card">
+                <div class="label">Suppressed</div>
+                <div class="value" style="color:var(--muted)">${(s.skipped||0).toLocaleString()}</div>
+                <div class="rate">skipped at send</div>
+            </div>
+            <div class="stat-card">
                 <div class="label">Unsubscribed</div>
                 <div class="value red">${(s.unsubscribed||0).toLocaleString()}</div>
                 <div class="rate">${r.unsubscribe_rate||'0%'}</div>
@@ -737,9 +753,11 @@ async function loadCampaignReport() {
         </div>
         <div class="btn-row mt-2">
             <button class="btn btn-secondary btn-sm" onclick="exportCSV('campaign/${id}')">Export CSV</button>
-            <button class="btn btn-primary btn-sm" onclick="loadRecipientList('${id}','opened')">Who Opened</button>
-            <button class="btn btn-success btn-sm" onclick="loadRecipientList('${id}','clicked')">Who Clicked</button>
+            <button class="btn btn-primary btn-sm" onclick="loadRecipientList('${id}','sent')">Sent</button>
+            <button class="btn btn-primary btn-sm" onclick="loadRecipientList('${id}','opened')">Opened</button>
+            <button class="btn btn-success btn-sm" onclick="loadRecipientList('${id}','clicked')">Clicked</button>
             <button class="btn btn-secondary btn-sm" onclick="loadRecipientList('${id}','bounced')">Bounced</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadRecipientList('${id}','skipped')">Suppressed</button>
             <button class="btn btn-danger btn-sm" onclick="loadRecipientList('${id}','complained')">Complaints</button>
         </div>
         <div id="recipient-list-${id}" class="mt-2"></div>`;
@@ -750,15 +768,17 @@ async function loadRecipientList(campaignId, eventType) {
     el.innerHTML = '<span class="loading"></span>';
     const d = await api(`/reports/campaign/${campaignId}/recipients?event_type=${eventType}&limit=100`);
     const label = { opened: 'Opened', clicked: 'Clicked', bounced: 'Bounced', complained: 'Complaints' }[eventType] || eventType;
+    const label = { sent: 'Sent', opened: 'Opened', clicked: 'Clicked', bounced: 'Bounced', skipped: 'Suppressed', complained: 'Complaints', delivered: 'Delivered' }[eventType] || eventType;
     el.innerHTML = `<div class="card mt-2">
         <h2 style="font-size:14px;margin-bottom:12px">${label} — ${d.total} contacts</h2>
-        ${d.events.length ? `<table>
-            <thead><tr><th>Email</th><th>Date</th></tr></thead>
+        ${d.events.length ? `<div style="overflow-x:auto"><table>
+            <thead><tr><th>Email</th><th>Detail</th><th>Date</th></tr></thead>
             <tbody>${d.events.map(e=>`<tr>
                 <td>${e.email}</td>
-                <td class="text-muted">${new Date(e.created_at).toLocaleString()}</td>
+                <td class="text-muted" style="font-size:12px">${e.bounce_message||e.reason||e.click_url||''}</td>
+                <td class="text-muted" style="white-space:nowrap">${new Date(e.created_at).toLocaleString()}</td>
             </tr>`).join('')}</tbody>
-        </table>
+        </table></div>
         ${d.total > 100 ? `<p class="text-muted mt-1">Showing first 100 of ${d.total}. Export CSV for full list.</p>` : ''}` : '<p class="text-muted">No records found.</p>'}
     </div>`;
 }
