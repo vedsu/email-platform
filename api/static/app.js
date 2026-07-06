@@ -668,7 +668,7 @@ async function bulkSuppressCSV() {
     loadSuppressions();
 }
 
-async function removeSup(email) { if (!confirm('Remove '+email+'?')) return; await api('/suppressions/'+email, {method:'DELETE'}); toast('Suppression removed'); loadSuppressions(); }
+async function removeSup(email) { if (!confirm('Remove '+email+'?')) return; await api('/suppressions/'+encodeURIComponent(email), {method:'DELETE'}); toast('Suppression removed'); loadSuppressions(); }
 
 // --- Reports ---
 async function loadReports() {
