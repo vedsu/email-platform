@@ -58,6 +58,12 @@ async def csv_import_contacts(
             imported += 1
         except Exception as e:
             if "duplicate key" in str(e):
+                if list_id:
+                    # Contact exists — add them to the list without overwriting other fields
+                    await db.contacts.update_one(
+                        {"email": email},
+                        {"$addToSet": {"list_ids": list_id}, "$set": {"updated_at": datetime.utcnow()}},
+                    )
                 skipped += 1
             else:
                 errors.append(f"{email}: {str(e)}")

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
@@ -8,6 +9,8 @@ from models.database import get_db
 from models.contact import StreamType, ContactStatus
 from models.campaign import CampaignStatus
 from core.auth import get_current_user, require_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -187,11 +190,13 @@ async def launch_campaign(campaign_id: str, user: dict = Depends(get_current_use
 
     from worker.tasks import send_to_recipient
 
-    cursor = db.contacts.find(query, {"_id": 1})
-    enqueued = 0
-    async for contact in cursor:
+    # Collect all IDs first to avoid Motor async cursor truncation under load
+    contacts = await db.contacts.find(query, {"_id": 1}).to_list(length=None)
+    for contact in contacts:
         send_to_recipient.delay(campaign_id, str(contact["_id"]))
-        enqueued += 1
+
+    enqueued = len(contacts)
+    logger.info(f"Campaign {campaign_id}: enqueued {enqueued}/{total_recipients} tasks")
 
     return {
         "campaign_id": campaign_id,
@@ -227,22 +232,22 @@ async def resume_campaign(campaign_id: str, user: dict = Depends(get_current_use
 
     from worker.tasks import send_to_recipient
 
-    sent_emails = set()
+    done_ids = set()
     async for evt in db.events.find(
-        {"campaign_id": campaign_id, "event_type": {"$in": ["sent", "bounced"]}},
+        {"campaign_id": campaign_id, "event_type": {"$in": ["sent", "bounced", "skipped"]}},
         {"contact_id": 1},
     ):
-        sent_emails.add(evt["contact_id"])
+        done_ids.add(evt["contact_id"])
 
     query = {"status": ContactStatus.ACTIVE.value}
     list_ids = campaign.get("target_list_ids", [])
     if list_ids:
         query["list_ids"] = {"$in": list_ids}
 
-    cursor = db.contacts.find(query, {"_id": 1})
+    contacts = await db.contacts.find(query, {"_id": 1}).to_list(length=None)
     enqueued = 0
-    async for contact in cursor:
-        if str(contact["_id"]) not in sent_emails:
+    for contact in contacts:
+        if str(contact["_id"]) not in done_ids:
             send_to_recipient.delay(campaign_id, str(contact["_id"]))
             enqueued += 1
 

@@ -21,21 +21,9 @@ def _check_campaign_completion(db, campaign_id: str):
 
     total = campaign["stats"].get("total_recipients", 0)
 
-    sent = db.events.count_documents({"campaign_id": campaign_id, "event_type": "sent"})
-    bounced = db.events.count_documents({"campaign_id": campaign_id, "event_type": "bounced"})
-
-    list_ids = campaign.get("target_list_ids") or []
-    if campaign.get("target_list_id"):
-        list_ids = list_ids or [campaign["target_list_id"]]
-
-    if list_ids:
-        emails = [c["email"] for c in db.contacts.find({"list_ids": {"$in": list_ids}}, {"email": 1})]
-        skipped = db.suppressions.count_documents({"email": {"$in": emails}}) if emails else 0
-    else:
-        skipped = 0
-
-    processed = sent + bounced + skipped
-    logger.info(f"Campaign {campaign_id} completion check: sent={sent} bounced={bounced} skipped={skipped} total={total}")
+    # Count unique contacts with any event (sent, bounced, skipped) — no double-counting
+    processed = len(db.events.distinct("contact_id", {"campaign_id": campaign_id}))
+    logger.info(f"Campaign {campaign_id} completion check: processed={processed} total={total}")
 
     if processed >= total:
         db.campaigns.update_one(
@@ -71,6 +59,13 @@ def send_to_recipient(self, campaign_id: str, contact_id: str, attempt: int = 1)
     # 1. Suppression check
     if is_suppressed(email):
         logger.info(f"Skipping {email} — suppressed")
+        db.events.update_one(
+            {"campaign_id": campaign_id, "contact_id": contact_id, "event_type": "skipped"},
+            {"$setOnInsert": {"email": email, "event_type": "skipped", "reason": "suppressed",
+                              "campaign_id": campaign_id, "contact_id": contact_id,
+                              "created_at": datetime.utcnow()}},
+            upsert=True,
+        )
         _check_campaign_completion(db, campaign_id)
         return {"status": "skipped", "reason": "suppressed", "email": email}
 
