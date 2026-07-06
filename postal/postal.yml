@@ -37,7 +37,7 @@ dns:
   smtp_server_hostname: postal.localhost
   spf_include: spf.postal.localhost
   return_path_domain: rp.postal.localhost
-  track_domain: track.postal.localhost
+  track_domain: track.vedsupost.com
 
 logging:
   stdout: true
