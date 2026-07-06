@@ -666,6 +666,8 @@ async function bulkSuppressCSV() {
     resultEl.innerHTML = `<div class="import-success"><span class="badge suppressed">Suppressed: ${data.added}</span> <span class="badge cold">Already suppressed: ${data.skipped}</span></div>`;
     toast(`${data.added} emails suppressed from CSV`);
     loadSuppressions();
+    document.getElementById('sup-bulk-file').value = '';
+    setTimeout(() => closeModal('sup-bulk-modal'), 2000);
 }
 
 async function removeSup(email) { if (!confirm('Remove '+email+'?')) return; await api('/suppressions/'+encodeURIComponent(email), {method:'DELETE'}); toast('Suppression removed'); loadSuppressions(); }
