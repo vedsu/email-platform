@@ -574,8 +574,8 @@ async function openCampaignModal() {
 
 function filterCampLists() {
     const stream = document.getElementById('camp-stream').value;
-    const domainMap = { optin: 'mail.webinarsorbit.com', engaged: 'eng.webinarsorbit.com', cold: 'out.webinarsorbit.com' };
-    document.getElementById('camp-from-email').value = `hello@${domainMap[stream] || 'mail.webinarsorbit.com'}`;
+    const domainMap = { optin: 'webinarsorbit.com', engaged: 'webinarsorbit.com', cold: 'webinarsorbit.com' };
+    document.getElementById('camp-from-email').value = `hello@${domainMap[stream] || 'webinarsorbit.com'}`;
 
     const filtered = ALL_LISTS.filter(l => l.stream === stream);
     const listOpts = filtered.map(l => ({ value: l._id, label: `${l.name} (${(l.contact_count||0).toLocaleString()})` }));
