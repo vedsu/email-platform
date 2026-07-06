@@ -11,6 +11,7 @@ services:
       - mongo_data:/data/db
     environment:
       MONGO_INITDB_DATABASE: ${MONGO_DB:-email_platform}
+    command: ["mongod", "--auth"]
     restart: unless-stopped
 
   redis:
