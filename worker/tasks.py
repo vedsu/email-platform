@@ -19,24 +19,30 @@ def _check_campaign_completion(db, campaign_id: str):
     if not campaign or campaign["status"] != "sending":
         return
 
-    sent = campaign["stats"].get("sent", 0)
     total = campaign["stats"].get("total_recipients", 0)
-    events_count = db.events.count_documents({"campaign_id": campaign_id, "event_type": "sent"})
-    skipped = db.suppressions.count_documents({
-        "email": {"$in": [
-            c["email"] for c in db.contacts.find(
-                {"list_ids": campaign.get("target_list_id"), "status": "suppressed"},
-                {"email": 1}
-            )
-        ]}
-    }) if campaign.get("target_list_id") else 0
 
-    if (sent + skipped) >= total or events_count >= total:
+    sent = db.events.count_documents({"campaign_id": campaign_id, "event_type": "sent"})
+    bounced = db.events.count_documents({"campaign_id": campaign_id, "event_type": "bounced"})
+
+    list_ids = campaign.get("target_list_ids") or []
+    if campaign.get("target_list_id"):
+        list_ids = list_ids or [campaign["target_list_id"]]
+
+    if list_ids:
+        emails = [c["email"] for c in db.contacts.find({"list_ids": {"$in": list_ids}}, {"email": 1})]
+        skipped = db.suppressions.count_documents({"email": {"$in": emails}}) if emails else 0
+    else:
+        skipped = 0
+
+    processed = sent + bounced + skipped
+    logger.info(f"Campaign {campaign_id} completion check: sent={sent} bounced={bounced} skipped={skipped} total={total}")
+
+    if processed >= total:
         db.campaigns.update_one(
             {"_id": ObjectId(campaign_id), "status": "sending"},
             {"$set": {"status": "completed", "completed_at": datetime.utcnow()}},
         )
-        logger.info(f"Campaign {campaign_id} completed (sent={sent}, skipped={skipped}, total={total})")
+        logger.info(f"Campaign {campaign_id} marked completed")
 
 
 MAX_SEND_ATTEMPTS = 3
