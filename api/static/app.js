@@ -783,7 +783,6 @@ async function loadRecipientList(campaignId, eventType) {
     const el = document.getElementById(`recipient-list-${campaignId}`);
     el.innerHTML = '<span class="loading"></span>';
     const d = await api(`/reports/campaign/${campaignId}/recipients?event_type=${eventType}&limit=100`);
-    const label = { opened: 'Opened', clicked: 'Clicked', bounced: 'Bounced', complained: 'Complaints' }[eventType] || eventType;
     const label = { sent: 'Sent', opened: 'Opened', clicked: 'Clicked', bounced: 'Bounced', skipped: 'Suppressed', complained: 'Complaints', delivered: 'Delivered' }[eventType] || eventType;
     el.innerHTML = `<div class="card mt-2">
         <h2 style="font-size:14px;margin-bottom:12px">${label} — ${d.total} contacts</h2>
