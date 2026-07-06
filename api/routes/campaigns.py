@@ -228,7 +228,10 @@ async def resume_campaign(campaign_id: str, user: dict = Depends(get_current_use
     from worker.tasks import send_to_recipient
 
     sent_emails = set()
-    async for evt in db.events.find({"campaign_id": campaign_id, "event_type": "sent"}, {"contact_id": 1}):
+    async for evt in db.events.find(
+        {"campaign_id": campaign_id, "event_type": {"$in": ["sent", "bounced"]}},
+        {"contact_id": 1},
+    ):
         sent_emails.add(evt["contact_id"])
 
     query = {"status": ContactStatus.ACTIVE.value}
