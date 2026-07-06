@@ -39,8 +39,11 @@ def _check_campaign_completion(db, campaign_id: str):
         logger.info(f"Campaign {campaign_id} completed (sent={sent}, skipped={skipped}, total={total})")
 
 
+MAX_SEND_ATTEMPTS = 3
+
+
 @celery.task(name="send_to_recipient", bind=True, max_retries=3, default_retry_delay=60)
-def send_to_recipient(self, campaign_id: str, contact_id: str):
+def send_to_recipient(self, campaign_id: str, contact_id: str, attempt: int = 1):
     db = get_sync_db()
 
     campaign = db.campaigns.find_one({"_id": ObjectId(campaign_id)})
@@ -102,13 +105,24 @@ def send_to_recipient(self, campaign_id: str, contact_id: str):
 
     now = datetime.utcnow()
 
-    # If Postal returned an application-level error, record as bounce
+    # If Postal returned an application-level error, retry back-of-queue (up to MAX_SEND_ATTEMPTS)
     if result.get("status") != "success":
         error_data = result.get("data", {})
         error_code = error_data.get("code", "UnknownError")
         error_msg = error_data.get("message", str(result))
         bounce_message = f"{error_code}: {error_msg}"
-        logger.error(f"Postal rejected {email}: {bounce_message}")
+        logger.error(f"Postal rejected {email} (attempt {attempt}/{MAX_SEND_ATTEMPTS}): {bounce_message}")
+
+        if attempt < MAX_SEND_ATTEMPTS:
+            # Re-queue at back of queue (countdown=0 puts it after currently-queued tasks)
+            send_to_recipient.apply_async(
+                args=[campaign_id, contact_id],
+                kwargs={"attempt": attempt + 1},
+                countdown=0,
+            )
+            return {"status": "retrying", "email": email, "attempt": attempt, "reason": bounce_message}
+
+        # Final attempt failed — record permanent bounce
         db.events.insert_one({
             "campaign_id": campaign_id,
             "contact_id": contact_id,
@@ -118,7 +132,7 @@ def send_to_recipient(self, campaign_id: str, contact_id: str):
             "postal_message_id": None,
             "bounce_type": "hard",
             "bounce_message": bounce_message,
-            "metadata": {},
+            "metadata": {"attempts": attempt},
             "created_at": now,
         })
         db.campaigns.update_one(

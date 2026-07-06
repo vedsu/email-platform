@@ -506,6 +506,10 @@
             <div id="camp-lists-info" class="lists-info"></div>
         </div>
         <div class="form-group"><label>HTML Body</label><textarea id="camp-html" rows="6"></textarea></div>
+        <div class="form-group" style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="camp-auto-suppress" checked style="width:auto;margin:0">
+            <label for="camp-auto-suppress" style="margin:0;font-weight:normal">Auto-suppress bounced &amp; complained addresses</label>
+        </div>
         <div class="btn-row"><button class="btn btn-primary" onclick="createCampaign()">Create</button><button class="btn btn-secondary" onclick="closeModal('campaign-modal')">Cancel</button></div>
     </div></div>
 

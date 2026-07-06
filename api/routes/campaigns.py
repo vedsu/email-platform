@@ -24,6 +24,7 @@ class CampaignCreate(BaseModel):
     stream: StreamType = StreamType.COLD
     target_list_ids: list[str] = []
     scheduled_at: Optional[datetime] = None
+    auto_suppress: bool = True
 
 
 class CampaignUpdate(BaseModel):
@@ -37,6 +38,7 @@ class CampaignUpdate(BaseModel):
     stream: Optional[StreamType] = None
     target_list_ids: Optional[list[str]] = None
     scheduled_at: Optional[datetime] = None
+    auto_suppress: Optional[bool] = None
 
 
 @router.post("")
@@ -74,6 +76,7 @@ async def create_campaign(payload: CampaignCreate, user: dict = Depends(get_curr
         "stream": payload.stream.value,
         "target_list_ids": payload.target_list_ids,
         "status": CampaignStatus.SCHEDULED.value if payload.scheduled_at else CampaignStatus.DRAFT.value,
+        "auto_suppress": payload.auto_suppress,
         "stats": {"total_recipients": 0, "sent": 0, "delivered": 0, "opened": 0, "clicked": 0, "bounced": 0, "soft_bounced": 0, "complained": 0, "unsubscribed": 0},
         "scheduled_at": payload.scheduled_at,
         "started_at": None,

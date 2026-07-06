@@ -614,6 +614,7 @@ async function createCampaign() {
         stream: document.getElementById('camp-stream').value,
         target_list_ids: listIds,
         html_body: document.getElementById('camp-html').value,
+        auto_suppress: document.getElementById('camp-auto-suppress').checked,
         scheduled_at: schedule ? new Date(schedule).toISOString() : undefined,
     };
     await api('/campaigns', { method: 'POST', body: JSON.stringify(body) });

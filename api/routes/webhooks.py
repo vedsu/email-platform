@@ -100,13 +100,22 @@ async def postal_webhook(request: Request):
             },
         )
 
-    if mapped_type == "bounced" and bounce_type == "hard":
-        add_suppression(rcpt_to, "hard_bounce", source="postal_webhook", campaign_id=tag)
-        logger.info(f"Hard bounce: {rcpt_to} suppressed")
-    elif mapped_type == "bounced" and bounce_type == "soft":
-        from core.suppression_rules import check_auto_suppress_soft_bounce
-        if check_auto_suppress_soft_bounce(rcpt_to, campaign_id=tag):
-            logger.info(f"Soft bounce auto-suppressed: {rcpt_to} (exceeded threshold)")
+    if mapped_type == "bounced":
+        try:
+            campaign_doc = await db.campaigns.find_one({"_id": ObjectId(tag)}) if tag else None
+        except Exception:
+            campaign_doc = None
+        should_suppress = (campaign_doc or {}).get("auto_suppress", True)
+        if should_suppress:
+            if bounce_type == "hard":
+                add_suppression(rcpt_to, "hard_bounce", source="postal_webhook", campaign_id=tag)
+                logger.info(f"Hard bounce: {rcpt_to} suppressed")
+            elif bounce_type == "soft":
+                from core.suppression_rules import check_auto_suppress_soft_bounce
+                if check_auto_suppress_soft_bounce(rcpt_to, campaign_id=tag):
+                    logger.info(f"Soft bounce auto-suppressed: {rcpt_to} (exceeded threshold)")
+        else:
+            logger.info(f"Bounce for {rcpt_to} — auto-suppress disabled for campaign {tag}")
 
     logger.info(f"Webhook: {event_type} → {mapped_type} for {rcpt_to}")
     return {"status": "processed", "event": mapped_type, "email": rcpt_to}

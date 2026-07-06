@@ -24,6 +24,8 @@ def send_message(
         "from": f"{from_name} <{from_addr}>",
         "subject": subject,
         "html_body": html_body,
+        "track_opens": True,
+        "track_clicks": True,
         "headers": {
             "List-Unsubscribe": f"<{unsub_url}>, <mailto:unsubscribe@{from_addr.split('@')[1]}>",
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
