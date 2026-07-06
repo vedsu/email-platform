@@ -59,13 +59,18 @@ def send_to_recipient(self, campaign_id: str, contact_id: str, attempt: int = 1)
     # 1. Suppression check
     if is_suppressed(email):
         logger.info(f"Skipping {email} — suppressed")
-        db.events.update_one(
+        inserted = db.events.update_one(
             {"campaign_id": campaign_id, "contact_id": contact_id, "event_type": "skipped"},
             {"$setOnInsert": {"email": email, "event_type": "skipped", "reason": "suppressed",
                               "campaign_id": campaign_id, "contact_id": contact_id,
                               "created_at": datetime.utcnow()}},
             upsert=True,
         )
+        if inserted.upserted_id:
+            db.campaigns.update_one(
+                {"_id": ObjectId(campaign_id)},
+                {"$inc": {"stats.skipped": 1}},
+            )
         _check_campaign_completion(db, campaign_id)
         return {"status": "skipped", "reason": "suppressed", "email": email}
 

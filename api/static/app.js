@@ -555,12 +555,28 @@ async function loadCampaigns() {
         }
         const tplName = c.template_id ? ' (from template)' : '';
         const archived = c.archived ? ' <span class="badge suppressed">archived</span>' : '';
-        return `<tr><td>${c.name}<span class="text-muted">${tplName}</span>${archived}</td><td><span class="badge ${c.stream}">${c.stream}</span></td><td><span class="badge ${c.status}">${c.status}</span></td><td>${s.sent||0}/${s.total_recipients||0}</td><td>${s.opened||0}</td><td>${s.bounced||0}</td><td>${actions}</td></tr>`;
+        const total = s.total_recipients || 0;
+        const processed = (s.sent||0) + (s.bounced||0) + (s.skipped||0);
+        const pct = total > 0 ? Math.min(100, Math.round(processed / total * 100)) : 0;
+        const progressBar = (c.status === 'sending' && total > 0) ? `
+            <div style="margin-top:4px;font-size:11px;color:var(--muted)">${processed}/${total} &nbsp;${pct}%</div>
+            <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;min-width:80px">
+                <div style="height:100%;width:${pct}%;background:var(--primary);border-radius:2px"></div>
+            </div>` : '';
+        const statusCell = `<span class="badge ${c.status}">${c.status}</span>${progressBar}`;
+        return `<tr><td>${c.name}<span class="text-muted">${tplName}</span>${archived}</td><td><span class="badge ${c.stream}">${c.stream}</span></td><td style="min-width:120px">${statusCell}</td><td>${s.sent||0}/${total}</td><td>${s.opened||0}</td><td>${s.bounced||0}</td><td>${actions}</td></tr>`;
     }).join('');
     ['report-campaign','ai-camp'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = '<option value="">Select...</option>' + d.campaigns.map(c => `<option value="${c._id}">${c.name} (${c.status})</option>`).join('');
     });
+    // Auto-refresh while any campaign is sending
+    clearTimeout(window._campRefreshTimer);
+    if (d.campaigns.some(c => c.status === 'sending')) {
+        window._campRefreshTimer = setTimeout(() => {
+            if (document.getElementById('campaigns-tbody')) loadCampaigns();
+        }, 4000);
+    }
 }
 
 async function openCampaignModal() {
