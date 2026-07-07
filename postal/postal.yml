@@ -9,14 +9,14 @@ main_db:
   host: mariadb
   port: 3306
   username: root
-  password: postal_root_pass
+  password: Pr0d_M@r1aDB_2026!
   database: postal
 
 message_db:
   host: mariadb
   port: 3306
   username: root
-  password: postal_root_pass
+  password: Pr0d_M@r1aDB_2026!
   prefix: postal
 
 rabbitmq:
