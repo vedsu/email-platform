@@ -6,7 +6,6 @@ from worker.celery_app import celery
 from models.sync_db import get_sync_db
 from core.suppression import is_suppressed
 from core.warmup import check_warmup_quota, increment_send_count
-from core.routing import route_from_address
 from core.render import render_template
 from core.postal_client import send_message
 from core.rate_limiter import check_domain_rate_limit, increment_domain_count
@@ -84,8 +83,7 @@ def send_to_recipient(self, campaign_id: str, contact_id: str, attempt: int = 1)
         logger.info(f"Domain rate limit reached for {email}, requeueing")
         raise self.retry(exc=Exception(f"Domain rate limit reached for {email.split('@')[1]}"))
 
-    # 4. Stream routing
-    from_addr = route_from_address(campaign["from_email"], stream)
+    from_addr = campaign["from_email"]
 
     # 4. Render template
     html_body = render_template(campaign["html_body"], contact)
