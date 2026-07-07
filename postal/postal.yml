@@ -1,11 +1,9 @@
 version: 2
 
 postal:
-  web_hostname: localhost
-  web_protocol: http
-  smtp_hostname: postal.localhost
-  smtp_relays:
-    - smtp://mailpit:1025?ssl_mode=None
+  web_hostname: postal.vedsupost.com
+  web_protocol: https
+  smtp_hostname: smtp2.vedsupost.com
 
 main_db:
   host: mariadb
