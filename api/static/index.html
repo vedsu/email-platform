@@ -137,13 +137,28 @@
         .toast-warning { background: #d97706; }
 
         /* ── Multi-select ─────────────────────────────── */
-        .multi-select { position: relative; }
+        .multi-select { }
         .ms-display { padding: 9px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; cursor: pointer; background: #fff; min-height: 36px; color: #374151; }
-        .ms-dropdown { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1.5px solid #e5e7eb; border-radius: 8px; max-height: 210px; overflow-y: auto; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+        .ms-dropdown { display: none; background: #fff; border: 1.5px solid #e5e7eb; border-radius: 0 0 8px 8px; border-top: none; max-height: 210px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         .ms-dropdown.open { display: block; }
-        .ms-option { display: block; padding: 8px 12px; font-size: 13px; cursor: pointer; transition: background 0.1s; }
+        .ms-display.ms-open { border-radius: 8px 8px 0 0; border-color: #3b82f6; }
+        .ms-option { display: flex; align-items: center; padding: 8px 12px; font-size: 13px; cursor: pointer; transition: background 0.1s; gap: 8px; }
         .ms-option:hover { background: #f0f7ff; }
-        .ms-option input { margin-right: 8px; }
+        .ms-option input { margin: 0; flex-shrink: 0; }
+
+        /* ── 3-dot campaign menu ──────────────────────── */
+        .dot-menu { position: relative; display: inline-block; vertical-align: middle; }
+        .dot-menu summary { list-style: none; padding: 4px 8px; border-radius: 6px; cursor: pointer; color: #6b7280; font-size: 18px; line-height: 1; user-select: none; display: inline-block; }
+        .dot-menu summary::-webkit-details-marker { display: none; }
+        .dot-menu summary:hover { background: #f3f4f6; color: #111; }
+        .dot-drop { position: absolute; right: 0; top: calc(100% + 2px); background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); min-width: 210px; z-index: 300; padding: 6px 0; }
+        .dot-meta { padding: 3px 12px; font-size: 11px; color: #6b7280; line-height: 1.6; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dot-meta b { color: #374151; }
+        .dot-sep { border: none; border-top: 1px solid #f3f4f6; margin: 5px 0; }
+        .dot-btn { display: block; width: 100%; text-align: left; padding: 7px 12px; font-size: 12px; background: none; border: none; cursor: pointer; color: #374151; font-family: inherit; }
+        .dot-btn:hover { background: #f3f4f6; }
+        .dot-btn.danger { color: #ef4444; }
+        .dot-btn.danger:hover { background: #fef2f2; }
 
         /* ── AI / Preview ─────────────────────────────── */
         .ai-response, .preview-box { background: #f8fafc; border-left: 3px solid #3b82f6; padding: 14px 16px; border-radius: 0 8px 8px 0; margin-top: 12px; white-space: pre-wrap; font-size: 12px; line-height: 1.6; max-height: 360px; overflow-y: auto; }
@@ -363,14 +378,14 @@
 
             <!-- Templates -->
             <div id="page-templates" class="page">
-                <div class="card-header"><h2>Templates</h2><button class="btn btn-primary" onclick="openModal('template-modal')">Create Template</button></div>
+                <div class="card-header"><h2>Templates</h2><button class="btn btn-primary" onclick="openNewTemplateModal()">Create Template</button></div>
                 <div class="card"><table><thead><tr><th>Name</th><th>Category</th><th>Subject</th><th>Created</th><th>Actions</th></tr></thead><tbody id="templates-tbody"></tbody></table></div>
             </div>
 
             <!-- Campaigns -->
             <div id="page-campaigns" class="page">
                 <div class="card-header"><h2>Campaigns</h2><button class="btn btn-primary" onclick="openCampaignModal()">Create Campaign</button></div>
-                <div class="card"><table><thead><tr><th>Name</th><th>Stream</th><th>Status</th><th>Sent</th><th>Opened</th><th>Bounced</th><th>Actions</th></tr></thead><tbody id="campaigns-tbody"></tbody></table></div>
+                <div class="card"><table><thead><tr><th>Name</th><th>Stream</th><th>Status</th><th>Sent</th><th>Opened</th><th>Bounced</th><th>Sent On</th><th>Actions</th></tr></thead><tbody id="campaigns-tbody"></tbody></table></div>
             </div>
 
             <!-- Suppressions -->
@@ -492,6 +507,16 @@
         <div class="btn-row"><button class="btn btn-primary" onclick="createTemplate()">Save Template</button><button class="btn btn-secondary" onclick="closeModal('template-modal')">Cancel</button></div>
     </div></div>
 
+    <div class="modal-overlay" id="view-template-modal"><div class="modal" style="max-width:780px">
+        <h2 id="vtpl-title">Template Preview</h2>
+        <div id="vtpl-subject" style="font-size:12px;color:#6b7280;margin:-12px 0 14px"></div>
+        <iframe id="vtpl-frame" style="width:100%;height:480px;border:1px solid #e5e7eb;border-radius:8px;display:block" srcdoc=""></iframe>
+        <div class="btn-row" style="margin-top:16px">
+            <button class="btn btn-primary" onclick="editTemplate(window._viewingTplId);closeModal('view-template-modal')">Edit</button>
+            <button class="btn btn-secondary" onclick="closeModal('view-template-modal')">Close</button>
+        </div>
+    </div></div>
+
     <div class="modal-overlay" id="campaign-modal"><div class="modal"><h2>Create Campaign</h2>
         <div class="form-group"><label>Name</label><input id="camp-name"></div>
         <div class="form-group"><label>Template (optional)</label><select id="camp-tpl" onchange="onTemplateSelect()"><option value="">— None (custom) —</option></select></div>
@@ -518,6 +543,12 @@
             <label for="camp-auto-suppress" style="margin:0;font-weight:normal">Auto-suppress bounced &amp; complained addresses</label>
         </div>
         <div class="btn-row"><button class="btn btn-primary" onclick="createCampaign()">Create</button><button class="btn btn-secondary" onclick="closeModal('campaign-modal')">Cancel</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="camp-details-modal"><div class="modal" style="max-width:460px">
+        <h2 id="cdm-title">Campaign Details</h2>
+        <div id="cdm-body"></div>
+        <div class="btn-row" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal('camp-details-modal')">Close</button></div>
     </div></div>
 
     <div class="modal-overlay" id="sup-modal"><div class="modal"><h2>Add Suppression</h2>

@@ -1,6 +1,8 @@
 let TOKEN = localStorage.getItem('token');
 let USER = JSON.parse(localStorage.getItem('user') || 'null');
 let ALL_LISTS = [];
+let ALL_TEMPLATES = [];
+let editingTemplateId = null;
 
 // --- API ---
 async function api(path, opts = {}) {
@@ -105,7 +107,10 @@ function createMultiSelect(containerId, options, placeholder = 'Select...') {
     const display = document.createElement('div');
     display.className = 'ms-display';
     display.textContent = placeholder;
-    display.onclick = () => dropdown.classList.toggle('open');
+    display.onclick = () => {
+        dropdown.classList.toggle('open');
+        display.classList.toggle('ms-open', dropdown.classList.contains('open'));
+    };
 
     const dropdown = document.createElement('div');
     dropdown.className = 'ms-dropdown';
@@ -499,29 +504,85 @@ async function addContactsToList() {
 // --- Templates ---
 async function loadTemplates() {
     const d = await api('/templates');
-    document.getElementById('templates-tbody').innerHTML = d.templates.map(t => `<tr>
+    ALL_TEMPLATES = d.templates || [];
+    document.getElementById('templates-tbody').innerHTML = ALL_TEMPLATES.map(t => `<tr>
         <td>${t.name}</td><td><span class="badge">${t.category}</span></td><td>${t.subject}</td>
         <td>${new Date(t.created_at).toLocaleDateString()}</td>
-        <td><button class="btn btn-secondary btn-sm" onclick="cloneTemplate('${t._id}','${t.name}')">Clone</button> <button class="btn btn-danger btn-sm" onclick="deleteTemplate('${t._id}')">Del</button></td>
+        <td>
+            <button class="btn btn-secondary btn-sm" onclick="viewTemplate('${t._id}')">View</button>
+            <button class="btn btn-secondary btn-sm" onclick="editTemplate('${t._id}')">Edit</button>
+            <button class="btn btn-secondary btn-sm" onclick="cloneTemplate('${t._id}','${t.name}')">Clone</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteTemplate('${t._id}')">Del</button>
+        </td>
     </tr>`).join('');
 }
 
+function openNewTemplateModal() {
+    editingTemplateId = null;
+    document.querySelector('#template-modal h2').textContent = 'Create Template';
+    ['tpl-name','tpl-subject','tpl-preheader','tpl-html'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('tpl-cat').value = 'other';
+    const prev = document.getElementById('tpl-preview');
+    prev.classList.add('hidden'); prev.innerHTML = '';
+    openModal('template-modal');
+}
+
+async function editTemplate(id) {
+    const t = await api('/templates/' + id);
+    editingTemplateId = id;
+    document.querySelector('#template-modal h2').textContent = 'Edit Template';
+    document.getElementById('tpl-name').value = t.name || '';
+    document.getElementById('tpl-cat').value = t.category || 'other';
+    document.getElementById('tpl-subject').value = t.subject || '';
+    document.getElementById('tpl-preheader').value = t.preheader || '';
+    document.getElementById('tpl-html').value = t.html_body || '';
+    const prev = document.getElementById('tpl-preview');
+    prev.classList.add('hidden'); prev.innerHTML = '';
+    openModal('template-modal');
+}
+
+async function viewTemplate(id) {
+    const t = await api('/templates/' + id);
+    window._viewingTplId = id;
+    document.getElementById('vtpl-title').textContent = t.name;
+    document.getElementById('vtpl-subject').textContent = `Subject: ${t.subject}`;
+    const html = (t.html_body || '')
+        .replace(/\{\{first_name\}\}/g, 'John')
+        .replace(/\{\{last_name\}\}/g, 'Doe')
+        .replace(/\{\{email\}\}/g, 'john@example.com');
+    document.getElementById('vtpl-frame').srcdoc = html;
+    openModal('view-template-modal');
+}
+
 async function createTemplate() {
-    const listOpts = ALL_LISTS.map(l => ({ value: l._id, label: l.name }));
-    await api('/templates', { method: 'POST', body: JSON.stringify({
-        name: document.getElementById('tpl-name').value, category: document.getElementById('tpl-cat').value,
-        subject: document.getElementById('tpl-subject').value, preheader: document.getElementById('tpl-preheader').value,
-        html_body: document.getElementById('tpl-html').value
-    })});
+    const body = {
+        name: document.getElementById('tpl-name').value,
+        category: document.getElementById('tpl-cat').value,
+        subject: document.getElementById('tpl-subject').value,
+        preheader: document.getElementById('tpl-preheader').value,
+        html_body: document.getElementById('tpl-html').value,
+    };
+    if (editingTemplateId) {
+        await api(`/templates/${editingTemplateId}`, { method: 'PUT', body: JSON.stringify(body) });
+        toast('Template updated');
+    } else {
+        await api('/templates', { method: 'POST', body: JSON.stringify(body) });
+        toast('Template created');
+    }
+    editingTemplateId = null;
+    document.querySelector('#template-modal h2').textContent = 'Create Template';
     closeModal('template-modal');
-    toast('Template created');
     loadTemplates();
 }
 
 function previewTemplate() {
-    const html = document.getElementById('tpl-html').value.replace(/\{\{first_name\}\}/g, 'John').replace(/\{\{last_name\}\}/g, 'Doe').replace(/\{\{email\}\}/g, 'john@example.com');
+    const html = document.getElementById('tpl-html').value
+        .replace(/\{\{first_name\}\}/g, 'John')
+        .replace(/\{\{last_name\}\}/g, 'Doe')
+        .replace(/\{\{email\}\}/g, 'john@example.com');
     const el = document.getElementById('tpl-preview');
-    el.classList.remove('hidden'); el.innerHTML = html;
+    el.classList.remove('hidden');
+    el.innerHTML = `<iframe srcdoc="${html.replace(/"/g, '&quot;')}" style="width:100%;height:400px;border:none;border-radius:8px;display:block"></iframe>`;
 }
 
 async function cloneTemplate(id, name) {
@@ -541,19 +602,30 @@ async function deleteTemplate(id) {
 
 // --- Campaigns ---
 async function loadCampaigns() {
-    const d = await api('/campaigns');
+    const [d] = await Promise.all([
+        api('/campaigns'),
+        loadAllLists(),
+        api('/templates').then(t => { ALL_TEMPLATES = t.templates || []; }),
+    ]);
     document.getElementById('campaigns-tbody').innerHTML = d.campaigns.map(c => {
         const s = c.stats || {};
+
         let actions = '';
-        if (c.status === 'draft' || c.status === 'scheduled') actions = `<button class="btn btn-success btn-sm" onclick="launchCampaign('${c._id}')">Launch</button> `;
-        else if (c.status === 'sending') actions = `<button class="btn btn-secondary btn-sm" onclick="pauseCampaign('${c._id}')">Pause</button> `;
-        else if (c.status === 'paused') actions = `<button class="btn btn-primary btn-sm" onclick="resumeCampaign('${c._id}')">Resume</button> `;
-        actions += `<button class="btn btn-secondary btn-sm" onclick="exportCSV('campaign/${c._id}')">CSV</button>`;
+        if (c.status === 'draft' || c.status === 'scheduled') actions += `<button class="btn btn-success btn-sm" onclick="launchCampaign('${c._id}')">Launch</button> `;
+        else if (c.status === 'sending') actions += `<button class="btn btn-secondary btn-sm" onclick="pauseCampaign('${c._id}')">Pause</button> `;
+        else if (c.status === 'paused') actions += `<button class="btn btn-primary btn-sm" onclick="resumeCampaign('${c._id}')">Resume</button> `;
+        actions += `<button class="btn btn-secondary btn-sm" onclick="duplicateCampaign('${c._id}')">Clone</button> `;
+        actions += `<button class="btn btn-secondary btn-sm" onclick="showCampaignDetails('${c._id}')">Details</button> `;
         if (c.status !== 'sending') {
-            if (USER?.role === 'admin') actions += ` <button class="btn btn-danger btn-sm" onclick="deleteCampaign('${c._id}')">Delete</button>`;
-            else actions += ` <button class="btn btn-secondary btn-sm" onclick="archiveCampaign('${c._id}')">Archive</button>`;
+            if (USER?.role === 'admin') actions += `<button class="btn btn-danger btn-sm" onclick="deleteCampaign('${c._id}')">Del</button>`;
+            else actions += `<button class="btn btn-secondary btn-sm" onclick="archiveCampaign('${c._id}')">Archive</button>`;
         }
-        const tplName = c.template_id ? ' (from template)' : '';
+
+        const sentDate = c.completed_at
+            ? new Date(c.completed_at).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'2-digit'})
+            : (c.status === 'draft' || c.status === 'scheduled') ? '—'
+            : new Date(c.created_at).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'2-digit'});
+
         const archived = c.archived ? ' <span class="badge suppressed">archived</span>' : '';
         const total = s.total_recipients || 0;
         const processed = (s.sent||0) + (s.bounced||0) + (s.skipped||0);
@@ -564,7 +636,17 @@ async function loadCampaigns() {
                 <div style="height:100%;width:${pct}%;background:var(--primary);border-radius:2px"></div>
             </div>` : '';
         const statusCell = `<span class="badge ${c.status}">${c.status}</span>${progressBar}`;
-        return `<tr><td>${c.name}<span class="text-muted">${tplName}</span>${archived}</td><td><span class="badge ${c.stream}">${c.stream}</span></td><td style="min-width:120px">${statusCell}</td><td>${s.sent||0}/${total}</td><td>${s.opened||0}</td><td>${s.bounced||0}</td><td>${actions}</td></tr>`;
+
+        return `<tr>
+            <td>${c.name}${archived}</td>
+            <td><span class="badge ${c.stream}">${c.stream}</span></td>
+            <td style="min-width:120px">${statusCell}</td>
+            <td>${s.sent||0}/${total}</td>
+            <td>${s.opened||0}</td>
+            <td>${s.bounced||0}</td>
+            <td style="white-space:nowrap;font-size:12px;color:#6b7280">${sentDate}</td>
+            <td style="white-space:nowrap">${actions}</td>
+        </tr>`;
     }).join('');
     ['report-campaign','ai-camp'].forEach(id => {
         const el = document.getElementById(id);
@@ -640,6 +722,64 @@ async function createCampaign() {
     closeModal('campaign-modal');
     toast('Campaign created');
     loadCampaigns();
+}
+
+async function duplicateCampaign(id) {
+    const camp = await api('/campaigns/' + id);
+    await loadAllLists();
+    const tplData = await api('/templates');
+    const tplSel = document.getElementById('camp-tpl');
+    tplSel.innerHTML = '<option value="">— None (custom) —</option>' + tplData.templates.map(t => `<option value="${t._id}" data-subject="${t.subject}" data-preheader="${t.preheader||''}" data-html="${encodeURIComponent(t.html_body)}">${t.name}</option>`).join('');
+
+    document.getElementById('camp-name').value = camp.name + ' (copy)';
+    document.getElementById('camp-stream').value = camp.stream || 'cold';
+    filterCampLists();
+
+    document.getElementById('camp-subject').value = camp.subject || '';
+    document.getElementById('camp-preheader').value = camp.preheader || '';
+    document.getElementById('camp-from-name').value = camp.from_name || '';
+    const [localPart, domainPart] = (camp.from_email || '@').split('@');
+    document.getElementById('camp-from-local').value = localPart || '';
+    const domainSel = document.getElementById('camp-from-domain');
+    if ([...domainSel.options].some(o => o.value === domainPart)) domainSel.value = domainPart;
+    updateFromPreview();
+
+    document.getElementById('camp-html').value = camp.html_body || '';
+    document.getElementById('camp-auto-suppress').checked = camp.auto_suppress !== false;
+    document.getElementById('camp-schedule').value = '';
+
+    if (camp.template_id) tplSel.value = camp.template_id;
+
+    if (camp.target_list_ids?.length) {
+        setTimeout(() => {
+            camp.target_list_ids.forEach(listId => {
+                const cb = document.querySelector(`#camp-lists-ms input[value="${listId}"]`);
+                if (cb) cb.checked = true;
+            });
+            updateMultiSelectDisplay('camp-lists-ms', 'Select target lists...');
+        }, 50);
+    }
+
+    openModal('campaign-modal');
+}
+
+async function showCampaignDetails(id) {
+    const camp = await api('/campaigns/' + id);
+    const listNames = (camp.target_list_ids || []).map(lid => {
+        const l = ALL_LISTS.find(l => l._id === lid);
+        return l ? `${l.name} (${(l.contact_count||0).toLocaleString()})` : lid;
+    }).join('<br>') || '—';
+    const tplName = camp.template_id
+        ? (ALL_TEMPLATES.find(t => t._id === camp.template_id)?.name || 'Template')
+        : '—';
+    document.getElementById('cdm-title').textContent = camp.name;
+    document.getElementById('cdm-body').innerHTML = `
+        <table style="width:100%;font-size:13px;border-collapse:collapse">
+            <tr><td style="padding:7px 0;color:#6b7280;width:90px">From</td><td style="padding:7px 0;font-weight:500">${camp.from_name ? camp.from_name + ' &lt;' + (camp.from_email||'') + '&gt;' : (camp.from_email||'—')}</td></tr>
+            <tr style="border-top:1px solid #f3f4f6"><td style="padding:7px 0;color:#6b7280">Template</td><td style="padding:7px 0;font-weight:500">${tplName}</td></tr>
+            <tr style="border-top:1px solid #f3f4f6"><td style="padding:7px 0;color:#6b7280;vertical-align:top">Lists</td><td style="padding:7px 0;font-weight:500;line-height:1.8">${listNames}</td></tr>
+        </table>`;
+    openModal('camp-details-modal');
 }
 
 async function archiveCampaign(id) { if (!confirm('Archive this campaign? It will be hidden from your view but admin can still see it.')) return; await api('/campaigns/'+id+'/archive', {method:'POST'}); toast('Campaign archived'); loadCampaigns(); }
