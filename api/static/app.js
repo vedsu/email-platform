@@ -588,11 +588,14 @@ async function openCampaignModal() {
     openModal('campaign-modal');
 }
 
+function updateFromPreview() {
+    const local = (document.getElementById('camp-from-local').value || 'hello').trim();
+    const domain = document.getElementById('camp-from-domain').value;
+    document.getElementById('camp-from-preview').textContent = `${local}@${domain}`;
+}
+
 function filterCampLists() {
     const stream = document.getElementById('camp-stream').value;
-    const domainMap = { optin: 'webinarsorbit.com', engaged: 'webinarsorbit.com', cold: 'webinarsorbit.com' };
-    document.getElementById('camp-from-email').value = `hello@${domainMap[stream] || 'webinarsorbit.com'}`;
-
     const filtered = ALL_LISTS.filter(l => l.stream === stream);
     const listOpts = filtered.map(l => ({ value: l._id, label: `${l.name} (${(l.contact_count||0).toLocaleString()})` }));
     createMultiSelect('camp-lists-ms', listOpts, `Select ${stream} lists...`);
@@ -626,7 +629,7 @@ async function createCampaign() {
         subject: document.getElementById('camp-subject').value,
         preheader: document.getElementById('camp-preheader').value,
         from_name: document.getElementById('camp-from-name').value,
-        from_email: document.getElementById('camp-from-email').value,
+        from_email: `${(document.getElementById('camp-from-local').value || 'hello').trim()}@${document.getElementById('camp-from-domain').value}`,
         stream: document.getElementById('camp-stream').value,
         target_list_ids: listIds,
         html_body: document.getElementById('camp-html').value,

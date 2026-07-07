@@ -93,6 +93,8 @@
         .form-group input[type="file"] { padding: 6px 10px; background: #f9fafb; cursor: pointer; }
         .form-group textarea { resize: vertical; min-height: 80px; font-family: monospace; font-size: 12px; }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .form-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .from-preview { font-size: 11px; color: #6b7280; margin: -10px 0 14px; padding: 5px 10px; background: #f3f4f6; border-radius: 6px; font-family: monospace; }
 
         /* ── Buttons ──────────────────────────────────── */
         .btn { padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -495,7 +497,12 @@
         <div class="form-group"><label>Template (optional)</label><select id="camp-tpl" onchange="onTemplateSelect()"><option value="">— None (custom) —</option></select></div>
         <div class="form-group"><label>Subject</label><input id="camp-subject" placeholder="Hello {{first_name}}!"></div>
         <div class="form-group"><label>Preheader</label><input id="camp-preheader"></div>
-        <div class="form-row"><div class="form-group"><label>From Name</label><input id="camp-from-name" value="Dev Team"></div><div class="form-group"><label>From Email</label><input id="camp-from-email" value="hello@mail.localhost"></div></div>
+        <div class="form-row form-row-3">
+            <div class="form-group"><label>From Name</label><input id="camp-from-name" placeholder="e.g. Shubham Srivastava"></div>
+            <div class="form-group"><label>Sender Username</label><input id="camp-from-local" value="hello" placeholder="hello" oninput="updateFromPreview()"></div>
+            <div class="form-group"><label>Sending Domain</label><select id="camp-from-domain" onchange="updateFromPreview()"><option value="webinarsorbit.com">webinarsorbit.com</option><option value="onlinehrtraining.com">onlinehrtraining.com</option></select></div>
+        </div>
+        <div class="from-preview" id="camp-from-preview">hello@webinarsorbit.com</div>
         <div class="form-row"><div class="form-group"><label>Stream</label><select id="camp-stream" onchange="filterCampLists()"><option value="cold">Cold</option><option value="optin">Opt-in</option><option value="engaged">Engaged</option></select></div><div class="form-group"><label>Schedule (optional)</label><input id="camp-schedule" type="datetime-local"></div></div>
         <div class="form-group">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
