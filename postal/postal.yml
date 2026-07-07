@@ -31,10 +31,10 @@ smtp_server:
 
 dns:
   mx_records:
-    - mx.postal.localhost
-  smtp_server_hostname: postal.localhost
-  spf_include: spf.postal.localhost
-  return_path_domain: rp.postal.localhost
+    - mx.postal.vedsupost.com
+  smtp_server_hostname: postal.vedsupost.com
+  spf_include: spf.postal.vedsupost.com
+  return_path_domain: rp.postal.vedsupost.com
   track_domain: track.vedsupost.com
 
 logging:
