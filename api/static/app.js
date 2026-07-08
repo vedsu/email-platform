@@ -831,6 +831,13 @@ async function bulkSuppressCSV() {
 
 async function removeSup(email) { if (!confirm('Remove '+email+'?')) return; await api('/suppressions/'+encodeURIComponent(email), {method:'DELETE'}); toast('Suppression removed'); loadSuppressions(); }
 
+async function backfillHardBounces() {
+    if (!confirm('Scan all bounce events and suppress any hard-bounce emails not yet in the list?')) return;
+    const d = await api('/admin/backfill-hard-bounces', {method:'POST'});
+    toast(`Backfill done — added: ${d.added}, already suppressed: ${d.already_suppressed}, total bounce events: ${d.total_hard_bounces_in_events}`);
+    loadSuppressions();
+}
+
 // --- Reports ---
 async function loadReports() {
     const d = await api('/reports/overview');

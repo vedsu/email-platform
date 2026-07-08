@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends
 import redis as redis_lib
 
@@ -108,3 +109,53 @@ async def audit_log(admin: dict = Depends(require_admin)):
         "recent_campaigns": recent_campaigns,
         "recent_logins": recent_logins,
     }
+
+
+@router.post("/backfill-hard-bounces")
+async def backfill_hard_bounces(admin: dict = Depends(require_admin)):
+    """
+    Scan the events collection for hard bounce events and add those emails
+    to the suppression list. Safe to run multiple times (skips duplicates).
+    """
+    db = get_db()
+
+    # Match events that were hard bounces — use raw_event name as ground truth
+    # because old code sometimes misclassified bounce_type
+    hard_bounce_query = {
+        "event_type": "bounced",
+        "$or": [
+            {"bounce_type": "hard"},
+            {"metadata.raw_event": {"$in": ["MessageBounced", "MessageDeliveryFailed"]}},
+        ],
+    }
+
+    emails = set()
+    async for evt in db.events.find(hard_bounce_query, {"email": 1, "campaign_id": 1}):
+        if evt.get("email"):
+            emails.add((evt["email"], evt.get("campaign_id", "")))
+
+    added = 0
+    skipped = 0
+    now = datetime.utcnow()
+
+    for email, campaign_id in emails:
+        try:
+            await db.suppressions.insert_one({
+                "email": email,
+                "reason": "hard_bounce",
+                "source": "backfill",
+                "campaign_id": campaign_id or None,
+                "created_at": now,
+            })
+            await db.contacts.update_one(
+                {"email": email},
+                {"$set": {"status": "suppressed", "updated_at": now}},
+            )
+            added += 1
+        except Exception as e:
+            if "duplicate key" in str(e):
+                skipped += 1
+            else:
+                raise
+
+    return {"added": added, "already_suppressed": skipped, "total_hard_bounces_in_events": len(emails)}

@@ -390,7 +390,7 @@
 
             <!-- Suppressions -->
             <div id="page-suppressions" class="page">
-                <div class="card-header"><h2>Suppressions</h2><div class="btn-row"><button class="btn btn-danger btn-sm" onclick="openModal('sup-modal')">Add One</button><button class="btn btn-danger btn-sm" onclick="openModal('sup-bulk-modal')">Bulk Upload</button><button class="btn btn-secondary btn-sm" onclick="exportCSV('suppressions')">Export</button></div></div>
+                <div class="card-header"><h2>Suppressions</h2><div class="btn-row"><button class="btn btn-danger btn-sm" onclick="openModal('sup-modal')">Add One</button><button class="btn btn-secondary btn-sm" onclick="openModal('sup-bulk-modal')">Bulk Upload</button><button class="btn btn-secondary btn-sm" onclick="exportCSV('suppressions')">Export</button><button class="btn btn-secondary btn-sm" onclick="backfillHardBounces()">Backfill Bounces</button></div></div>
                 <div class="stats-grid" id="sup-stats"></div>
                 <div class="card"><table><thead><tr><th>Email</th><th>Reason</th><th>Source</th><th>Date</th><th>Actions</th></tr></thead><tbody id="sup-tbody"></tbody></table></div>
             </div>
