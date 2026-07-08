@@ -4,7 +4,6 @@ from fastapi import APIRouter, Request
 from bson import ObjectId
 
 from models.database import get_db
-from core.suppression import add_suppression
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +20,13 @@ EVENT_MAP = {
 }
 
 
+def _extract_tag(raw_tag) -> str:
+    """Postal sends tag as string or single-item list; normalise to string."""
+    if isinstance(raw_tag, list):
+        return raw_tag[0] if raw_tag else ""
+    return raw_tag or ""
+
+
 @router.post("/postal")
 async def postal_webhook(request: Request):
     payload = await request.json()
@@ -31,10 +37,11 @@ async def postal_webhook(request: Request):
     if not mapped_type:
         return {"status": "ignored", "event": event_type}
 
-    message = payload.get("payload", {}).get("message", {})
-    rcpt_to = message.get("rcpt_to", payload.get("payload", {}).get("rcpt_to", ""))
+    postal_payload = payload.get("payload", {})
+    message = postal_payload.get("message", {})
+    rcpt_to = message.get("rcpt_to", postal_payload.get("rcpt_to", ""))
     postal_message_id = str(message.get("id", ""))
-    tag = message.get("tag", "")
+    tag = _extract_tag(message.get("tag", ""))
 
     db = get_db()
 
@@ -43,13 +50,13 @@ async def postal_webhook(request: Request):
     click_url = None
 
     if mapped_type == "bounced":
-        bounce_info = payload.get("payload", {})
-        bounce_message = bounce_info.get("details", bounce_info.get("output", ""))
-        status = bounce_info.get("status", message.get("status", ""))
-        bounce_type = "hard" if status in ("HardFail", "MessageDeliveryFailed") else "soft"
+        bounce_message = postal_payload.get("details", postal_payload.get("output", ""))
+        status = message.get("status", postal_payload.get("status", ""))
+        bounce_type = "hard" if status == "HardFail" else "soft"
+        logger.info(f"Bounce event: event={event_type} status={status!r} bounce_type={bounce_type} rcpt={rcpt_to}")
 
     if mapped_type == "clicked":
-        click_url = payload.get("payload", {}).get("url", "")
+        click_url = postal_payload.get("url", "")
 
     event_doc = {
         "campaign_id": tag,
@@ -72,9 +79,12 @@ async def postal_webhook(request: Request):
 
     await db.events.insert_one(event_doc)
 
+    # Update campaign stats
     if tag:
         try:
-            stat_field = f"stats.{mapped_type}"
+            stat_field = "stats.bounced" if mapped_type == "bounced" and bounce_type == "hard" else f"stats.{mapped_type}"
+            if mapped_type == "bounced" and bounce_type == "soft":
+                stat_field = "stats.soft_bounced"
             await db.campaigns.update_one(
                 {"_id": ObjectId(tag)},
                 {"$inc": {stat_field: 1}},
@@ -101,15 +111,34 @@ async def postal_webhook(request: Request):
         )
 
     if mapped_type == "bounced":
-        try:
-            campaign_doc = await db.campaigns.find_one({"_id": ObjectId(tag)}) if tag else None
-        except Exception:
-            campaign_doc = None
+        campaign_doc = None
+        if tag:
+            try:
+                campaign_doc = await db.campaigns.find_one({"_id": ObjectId(tag)})
+            except Exception:
+                pass
         should_suppress = (campaign_doc or {}).get("auto_suppress", True)
+
         if should_suppress:
             if bounce_type == "hard":
-                add_suppression(rcpt_to, "hard_bounce", source="postal_webhook", campaign_id=tag)
-                logger.info(f"Hard bounce: {rcpt_to} suppressed")
+                try:
+                    await db.suppressions.insert_one({
+                        "email": rcpt_to,
+                        "reason": "hard_bounce",
+                        "source": "postal_webhook",
+                        "campaign_id": tag or None,
+                        "created_at": datetime.utcnow(),
+                    })
+                    logger.info(f"Hard bounce suppressed: {rcpt_to}")
+                except Exception as e:
+                    if "duplicate key" not in str(e):
+                        logger.error(f"Suppression insert failed for {rcpt_to}: {e}")
+                    else:
+                        logger.info(f"Hard bounce {rcpt_to} already suppressed")
+                await db.contacts.update_one(
+                    {"email": rcpt_to},
+                    {"$set": {"status": "suppressed", "updated_at": datetime.utcnow()}},
+                )
             elif bounce_type == "soft":
                 from core.suppression_rules import check_auto_suppress_soft_bounce
                 if check_auto_suppress_soft_bounce(rcpt_to, campaign_id=tag):
