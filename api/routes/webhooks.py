@@ -39,7 +39,13 @@ async def postal_webhook(request: Request):
 
     postal_payload = payload.get("payload", {})
     message = postal_payload.get("message", {})
-    rcpt_to = message.get("rcpt_to", postal_payload.get("rcpt_to", ""))
+    # Postal puts recipient in rcpt_to for most events but falls back to "to" on bounces
+    rcpt_to = (
+        message.get("rcpt_to")
+        or message.get("to")
+        or postal_payload.get("rcpt_to")
+        or ""
+    ).strip().lower()
     postal_message_id = str(message.get("id", ""))
     tag = _extract_tag(message.get("tag", ""))
 

@@ -948,7 +948,7 @@ async function loadRecipientList(campaignId, eventType) {
         ${d.events.length ? `<div style="overflow-x:auto"><table>
             <thead><tr><th>Email</th><th>Detail</th><th>Date</th></tr></thead>
             <tbody>${d.events.map(e=>`<tr>
-                <td>${e.email}</td>
+                <td>${e.email || '<span class="text-muted">—</span>'}</td>
                 <td class="text-muted" style="font-size:12px">${e.bounce_message||e.reason||e.click_url||''}</td>
                 <td class="text-muted" style="white-space:nowrap">${new Date(e.created_at).toLocaleString()}</td>
             </tr>`).join('')}</tbody>
@@ -1225,7 +1225,20 @@ async function loadAdmin() {
         <h3 style="font-size:13px;margin:12px 0 8px">Recent Logins</h3>
         <table><thead><tr><th>User</th><th>Last Login</th></tr></thead><tbody>
         ${audit.recent_logins.map(l => `<tr><td>${l.email}</td><td>${new Date(l.last_login_at).toLocaleString()}</td></tr>`).join('')}
-        </tbody></table>`;
+        </tbody></table>
+        <div class="btn-row" style="margin-top:16px">
+            <button class="btn btn-secondary btn-sm" onclick="repairBounceEmails()">Repair Bounce Emails</button>
+        </div>`;
+}
+
+async function repairBounceEmails() {
+    if (!confirm('Match empty-email bounce events to sent events by postal_message_id?')) return;
+    try {
+        const d = await api('/admin/repair-bounce-emails', {method: 'POST'});
+        toast(`Repaired ${d.fixed} of ${d.total_empty} empty bounce emails`);
+    } catch (e) {
+        toast('Repair failed: ' + e.message, 'error');
+    }
 }
 
 // --- Init ---

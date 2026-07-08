@@ -111,6 +111,43 @@ async def audit_log(admin: dict = Depends(require_admin)):
     }
 
 
+@router.post("/repair-bounce-emails")
+async def repair_bounce_emails(admin: dict = Depends(require_admin)):
+    """
+    Fix bounce events that have empty email by matching postal_message_id
+    against sent events (which always have the email).
+    """
+    db = get_db()
+
+    # Find all bounce events with missing email
+    empty_bounces = []
+    async for evt in db.events.find(
+        {"event_type": "bounced", "email": {"$in": ["", None]}, "postal_message_id": {"$nin": ["", None]}}
+    ):
+        empty_bounces.append(evt)
+
+    fixed = 0
+    for evt in empty_bounces:
+        mid = str(evt["postal_message_id"])
+        # Find the matching sent event which always stores the email
+        sent = await db.events.find_one({"postal_message_id": mid, "event_type": "sent"})
+        if not sent or not sent.get("email"):
+            continue
+        email = sent["email"]
+        contact = await db.contacts.find_one({"email": email})
+        await db.events.update_one(
+            {"_id": evt["_id"]},
+            {"$set": {
+                "email": email,
+                "contact_id": str(contact["_id"]) if contact else evt.get("contact_id", ""),
+                "stream": contact.get("stream", "") if contact else evt.get("stream", ""),
+            }},
+        )
+        fixed += 1
+
+    return {"fixed": fixed, "total_empty": len(empty_bounces)}
+
+
 @router.post("/backfill-hard-bounces")
 async def backfill_hard_bounces(admin: dict = Depends(require_admin)):
     """
