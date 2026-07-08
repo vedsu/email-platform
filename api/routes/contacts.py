@@ -29,6 +29,19 @@ class ContactImportResult(BaseModel):
     errors: list[str]
 
 
+@router.post("")
+async def create_contact(payload: ContactCreate):
+    db = get_db()
+    contact = Contact(**payload.model_dump())
+    try:
+        result = await db.contacts.insert_one(contact.model_dump())
+        return {"created": str(payload.email), "id": str(result.inserted_id)}
+    except Exception as e:
+        if "duplicate key" in str(e):
+            raise HTTPException(status_code=409, detail="Contact already exists")
+        raise
+
+
 @router.post("/import", response_model=ContactImportResult)
 async def import_contacts(payload: ContactImport):
     db = get_db()

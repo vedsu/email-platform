@@ -257,8 +257,21 @@ async function loadCLContacts() {
          ${clContactsPage < totalPages - 1 ? `<button class="btn btn-secondary btn-sm" onclick="clContactsPage++;loadCLContacts()">Next</button>` : ''}`;
 }
 
-function exportListCSV(listId) {
-    window.open('/csv/export-contacts?list_id=' + listId, '_blank');
+async function exportListCSV(listId) {
+    try {
+        const res = await api('/csv/export-contacts?list_id=' + listId);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'contacts_list.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        toast('Export failed: ' + e.message, 'error');
+    }
 }
 
 async function deleteCLList(listId, listName) {
@@ -796,11 +809,39 @@ async function loadSuppressions() {
     document.getElementById('sup-tbody').innerHTML = d.suppressions.map(s => `<tr><td>${s.email}</td><td><span class="badge ${s.reason}">${s.reason}</span></td><td>${s.source||'-'}</td><td>${new Date(s.created_at).toLocaleDateString()}</td><td><button class="btn btn-secondary btn-sm" onclick="removeSup('${s.email}')">Remove</button></td></tr>`).join('');
 }
 
+async function saveContact() {
+    const email = document.getElementById('nc-email').value.trim();
+    if (!email) return toast('Email is required', 'error');
+    try {
+        await api('/contacts', {method:'POST', body:JSON.stringify({
+            email,
+            first_name: document.getElementById('nc-first').value.trim(),
+            last_name: document.getElementById('nc-last').value.trim(),
+            stream: document.getElementById('nc-stream').value,
+        })});
+        closeModal('add-contact-modal');
+        document.getElementById('nc-email').value = '';
+        document.getElementById('nc-first').value = '';
+        document.getElementById('nc-last').value = '';
+        toast('Contact added');
+        loadContacts();
+    } catch (e) {
+        toast(e.message || 'Failed to add contact', 'error');
+    }
+}
+
 async function addSuppression() {
-    await api('/suppressions', {method:'POST', body:JSON.stringify({email:document.getElementById('sup-email').value, reason:document.getElementById('sup-reason').value})});
-    closeModal('sup-modal');
-    toast('Email suppressed');
-    loadSuppressions();
+    const email = document.getElementById('sup-email').value.trim();
+    if (!email) return toast('Email is required', 'error');
+    try {
+        await api('/suppressions', {method:'POST', body:JSON.stringify({email, reason:document.getElementById('sup-reason').value})});
+        closeModal('sup-modal');
+        document.getElementById('sup-email').value = '';
+        toast('Email suppressed');
+        loadSuppressions();
+    } catch (e) {
+        toast(e.message || 'Failed to suppress email', 'error');
+    }
 }
 
 async function bulkSuppressCSV() {
@@ -1082,8 +1123,21 @@ async function deleteUser(id, email) {
 }
 
 // --- CSV Export ---
-function exportCSV(type) {
-    window.open('/csv/export-' + type, '_blank');
+async function exportCSV(type) {
+    try {
+        const res = await api('/csv/export-' + type);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = type.replace('/', '_') + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        toast('Export failed: ' + e.message, 'error');
+    }
 }
 
 // --- Domains ---

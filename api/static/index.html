@@ -269,7 +269,7 @@
 
             <!-- Contacts -->
             <div id="page-contacts" class="page">
-                <div class="card-header"><h2>Contacts</h2><div class="btn-row"><button class="btn btn-primary" onclick="openModal('import-modal')">Import</button><button class="btn btn-secondary" onclick="exportCSV('contacts')">Export CSV</button></div></div>
+                <div class="card-header"><h2>Contacts</h2><div class="btn-row"><button class="btn btn-primary" onclick="openModal('add-contact-modal')">Add One</button><button class="btn btn-primary" onclick="openModal('import-modal')">Import</button><button class="btn btn-secondary" onclick="exportCSV('contacts')">Export CSV</button></div></div>
                 <div class="filter-bar">
                     <input type="search" id="c-search" placeholder="Search by email..." oninput="resetContactsPage()">
                     <select id="c-list" onchange="resetContactsPage()"><option value="">All Lists</option></select>
@@ -549,6 +549,14 @@
         <h2 id="cdm-title">Campaign Details</h2>
         <div id="cdm-body"></div>
         <div class="btn-row" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal('camp-details-modal')">Close</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="add-contact-modal"><div class="modal"><h2>Add Contact</h2>
+        <div class="form-group"><label>Email *</label><input id="nc-email" type="email" placeholder="email@example.com"></div>
+        <div class="form-group"><label>First Name</label><input id="nc-first" placeholder="First name"></div>
+        <div class="form-group"><label>Last Name</label><input id="nc-last" placeholder="Last name"></div>
+        <div class="form-group"><label>Stream</label><select id="nc-stream"><option value="cold">Cold</option><option value="optin">Opt-in</option><option value="engaged">Engaged</option></select></div>
+        <div class="btn-row"><button class="btn btn-primary" onclick="saveContact()">Add Contact</button><button class="btn btn-secondary" onclick="closeModal('add-contact-modal')">Cancel</button></div>
     </div></div>
 
     <div class="modal-overlay" id="sup-modal"><div class="modal"><h2>Add Suppression</h2>
