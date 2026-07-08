@@ -36,6 +36,11 @@ async def csv_import_contacts(
         if not email:
             continue
 
+        if await db.suppressions.find_one({"email": email}):
+            skipped += 1
+            errors.append(f"{email}: suppressed")
+            continue
+
         doc = {
             "email": email,
             "first_name": row.get("first_name", row.get("first name", "")).strip(),
@@ -126,6 +131,10 @@ async def upload_and_split_contacts(
         for row in batch_rows:
             email = row.get("email", "").strip().lower()
             if not email or "@" not in email:
+                skipped += 1
+                continue
+
+            if await db.suppressions.find_one({"email": email}):
                 skipped += 1
                 continue
 

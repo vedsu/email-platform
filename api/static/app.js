@@ -829,7 +829,16 @@ async function bulkSuppressCSV() {
     setTimeout(() => closeModal('sup-bulk-modal'), 2000);
 }
 
-async function removeSup(email) { if (!confirm('Remove '+email+'?')) return; await api('/suppressions/'+encodeURIComponent(email), {method:'DELETE'}); toast('Suppression removed'); loadSuppressions(); }
+async function removeSup(email) {
+    if (!confirm('Remove ' + email + ' from suppression list?')) return;
+    try {
+        await api('/suppressions?email=' + encodeURIComponent(email), {method: 'DELETE'});
+        toast('Suppression removed');
+        loadSuppressions();
+    } catch (e) {
+        toast('Remove failed: ' + e.message, 'error');
+    }
+}
 
 async function backfillHardBounces() {
     if (!confirm('Scan all bounce events and suppress any hard-bounce emails not yet in the list?')) return;

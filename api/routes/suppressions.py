@@ -70,8 +70,8 @@ async def check_suppression(email: str):
     return {"email": email, "suppressed": doc is not None, "reason": doc["reason"] if doc else None}
 
 
-@router.delete("/{email}")
-async def remove_suppression(email: str):
+@router.delete("")
+async def remove_suppression(email: str = Query(...)):
     db = get_db()
     result = await db.suppressions.delete_one({"email": email})
     if result.deleted_count == 0:
