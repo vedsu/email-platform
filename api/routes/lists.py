@@ -93,6 +93,12 @@ async def delete_list(list_id: str):
     if not lst:
         raise HTTPException(status_code=404, detail="List not found")
 
-    result = await db.contacts.delete_many({"list_ids": list_id})
+    # Delete contacts that belong ONLY to this list
+    result = await db.contacts.delete_many({"list_ids": {"$eq": [list_id]}})
+    # Remove this list from contacts that belong to other lists too
+    await db.contacts.update_many(
+        {"list_ids": list_id},
+        {"$pull": {"list_ids": list_id}},
+    )
     await db.lists.delete_one({"_id": ObjectId(list_id)})
     return {"deleted": True, "contacts_deleted": result.deleted_count}
