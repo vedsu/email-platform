@@ -46,7 +46,7 @@ async def postal_webhook(request: Request):
         or postal_payload.get("rcpt_to")
         or ""
     ).strip().lower()
-    postal_message_id = str(message.get("id", ""))
+    postal_message_id = message.get("id")  # store as integer to match sent events
     tag = _extract_tag(message.get("tag", ""))
 
     db = get_db()

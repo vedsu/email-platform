@@ -128,9 +128,19 @@ async def repair_bounce_emails(admin: dict = Depends(require_admin)):
 
     fixed = 0
     for evt in empty_bounces:
-        mid = str(evt["postal_message_id"])
-        # Find the matching sent event which always stores the email
-        sent = await db.events.find_one({"postal_message_id": mid, "event_type": "sent"})
+        raw_mid = evt.get("postal_message_id", "")
+        if not raw_mid:
+            continue
+        # postal_message_id stored as string in webhook events, integer in sent events
+        candidates = [raw_mid]
+        try:
+            candidates.append(int(raw_mid))
+        except (ValueError, TypeError):
+            pass
+
+        sent = await db.events.find_one(
+            {"postal_message_id": {"$in": candidates}, "event_type": "sent"}
+        )
         if not sent or not sent.get("email"):
             continue
         email = sent["email"]
