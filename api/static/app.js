@@ -452,8 +452,7 @@ async function loadLists() {
         <td>${new Date(l.created_at).toLocaleDateString()}</td>
         <td>
             <button class="btn btn-primary btn-sm" onclick="openAddToListModal('${l._id}','${l.name}')">Add Contacts</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteList('${l._id}','${l.name}',false)">Delete</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteList('${l._id}','${l.name}',true)">Delete + Contacts</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteList('${l._id}','${l.name}')">Delete</button>
         </td>
     </tr>`).join('');
 }
@@ -465,18 +464,10 @@ async function createList() {
     loadLists();
 }
 
-async function deleteList(listId, listName, deleteContacts) {
-    const msg = deleteContacts
-        ? `Delete list "${listName}" AND all contacts that ONLY belong to this list?`
-        : `Delete list "${listName}"? Contacts will be kept but removed from this list.`;
-    if (!confirm(msg)) return;
-
-    if (deleteContacts) {
-        await api(`/lists/${listId}/delete-with-contacts`, { method: 'DELETE' });
-    } else {
-        await api(`/lists/${listId}/delete`, { method: 'DELETE' });
-    }
-    toast(`List "${listName}" deleted`);
+async function deleteList(listId, listName) {
+    if (!confirm(`Delete list "${listName}" and all its contacts from the system?`)) return;
+    const d = await api(`/lists/${listId}/delete`, { method: 'DELETE' });
+    toast(`List "${listName}" deleted — ${d.contacts_deleted} contacts removed`);
     loadLists();
     loadAllLists();
 }

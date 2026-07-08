@@ -162,17 +162,14 @@ async def upload_and_split_contacts(
                 imported += 1
             except Exception as e:
                 if "duplicate key" in str(e):
-                    # Always add existing contact to the new list.
-                    # duplicate_action controls whether we also overwrite their data.
-                    update = {"$addToSet": {"list_ids": list_id}, "$set": {"updated_at": now}}
                     if duplicate_action == "add_to_list":
-                        update["$set"].update({
-                            "first_name": row.get("first_name", row.get("first name", "")).strip() or None,
-                            "last_name": row.get("last_name", row.get("last name", "")).strip() or None,
-                            "stream": stream,
-                        })
-                    await db.contacts.update_one({"email": email}, update)
-                    added_to_list += 1
+                        await db.contacts.update_one(
+                            {"email": email},
+                            {"$addToSet": {"list_ids": list_id}},
+                        )
+                        added_to_list += 1
+                    else:
+                        skipped += 1
                 else:
                     skipped += 1
 
