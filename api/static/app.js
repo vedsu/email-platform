@@ -24,6 +24,17 @@ async function api(path, opts = {}) {
     return res.json();
 }
 
+// --- Auth Fetch (for multipart/FormData uploads that can't use api()) ---
+async function authFetch(url, opts = {}) {
+    const headers = { Authorization: 'Bearer ' + TOKEN, ...(opts.headers || {}) };
+    const res = await fetch(url, { ...opts, headers });
+    if (res.status === 401) {
+        doLogout();
+        throw new Error('Session expired — please log in again');
+    }
+    return res;
+}
+
 // --- Toast ---
 function toast(msg, type = 'success') {
     const el = document.createElement('div');
@@ -306,9 +317,8 @@ async function uploadAndSplit(btn) {
     document.getElementById('cl-upload-result').innerHTML = '';
 
     try {
-        const res = await fetch('/csv/upload-and-split', {
+        const res = await authFetch('/csv/upload-and-split', {
             method: 'POST',
-            headers: { Authorization: 'Bearer ' + TOKEN },
             body: form,
         });
         const data = await res.json();
@@ -413,7 +423,7 @@ async function importContacts() {
         form.append('file', csvFile);
         form.append('stream', stream);
         if (listId) form.append('list_id', listId);
-        const res = await fetch('/csv/import-contacts', { method: 'POST', headers: { Authorization: 'Bearer ' + TOKEN }, body: form });
+        const res = await authFetch('/csv/import-contacts', { method: 'POST', body: form });
         data = await res.json();
     } else {
         const raw = document.getElementById('import-data').value.trim();
@@ -856,9 +866,8 @@ async function bulkSuppressCSV() {
     form.append('file', file);
     form.append('reason', reason);
 
-    const res = await fetch('/suppressions/bulk-csv', {
+    const res = await authFetch('/suppressions/bulk-csv', {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + TOKEN },
         body: form,
     });
     const data = await res.json();
