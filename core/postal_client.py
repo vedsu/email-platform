@@ -17,7 +17,7 @@ def send_message(
     if not settings.postal_api_key:
         raise RuntimeError("POSTAL_API_KEY is not configured")
 
-    unsub_url = f"http://{settings.app_domain}:{settings.api_port}/unsubscribe/{to}"
+    unsub_url = f"https://{settings.app_domain}/unsubscribe/{to}"
 
     payload = {
         "to": [to],
