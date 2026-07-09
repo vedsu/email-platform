@@ -675,8 +675,17 @@ async function loadCampaigns() {
     }
 }
 
+async function loadDomainOptions(selectedDomain) {
+    const data = await api('/domains');
+    const verified = data.domains.filter(d => d.status === 'verified');
+    const sel = document.getElementById('camp-from-domain');
+    sel.innerHTML = verified.map(d => `<option value="${d.domain}">${d.domain}</option>`).join('');
+    if (selectedDomain && [...sel.options].some(o => o.value === selectedDomain)) sel.value = selectedDomain;
+    updateFromPreview();
+}
+
 async function openCampaignModal() {
-    await loadAllLists();
+    await Promise.all([loadAllLists(), loadDomainOptions()]);
     const tplData = await api('/templates');
     const tplSel = document.getElementById('camp-tpl');
     tplSel.innerHTML = '<option value="">— None (custom) —</option>' + tplData.templates.map(t => `<option value="${t._id}" data-subject="${t.subject}" data-preheader="${t.preheader||''}" data-html="${encodeURIComponent(t.html_body)}">${t.name}</option>`).join('');
@@ -740,7 +749,8 @@ async function createCampaign() {
 
 async function duplicateCampaign(id) {
     const camp = await api('/campaigns/' + id);
-    await loadAllLists();
+    const [localPart, domainPart] = (camp.from_email || '@').split('@');
+    await Promise.all([loadAllLists(), loadDomainOptions(domainPart)]);
     const tplData = await api('/templates');
     const tplSel = document.getElementById('camp-tpl');
     tplSel.innerHTML = '<option value="">— None (custom) —</option>' + tplData.templates.map(t => `<option value="${t._id}" data-subject="${t.subject}" data-preheader="${t.preheader||''}" data-html="${encodeURIComponent(t.html_body)}">${t.name}</option>`).join('');
@@ -752,10 +762,7 @@ async function duplicateCampaign(id) {
     document.getElementById('camp-subject').value = camp.subject || '';
     document.getElementById('camp-preheader').value = camp.preheader || '';
     document.getElementById('camp-from-name').value = camp.from_name || '';
-    const [localPart, domainPart] = (camp.from_email || '@').split('@');
     document.getElementById('camp-from-local').value = localPart || '';
-    const domainSel = document.getElementById('camp-from-domain');
-    if ([...domainSel.options].some(o => o.value === domainPart)) domainSel.value = domainPart;
     updateFromPreview();
 
     document.getElementById('camp-html').value = camp.html_body || '';
