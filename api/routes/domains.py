@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from bson import ObjectId
@@ -10,83 +9,24 @@ from core.auth import get_current_user, require_admin
 
 router = APIRouter(prefix="/domains", tags=["domains"])
 
-STREAM_PREFIXES = {
-    "optin": "mail",
-    "engaged": "eng",
-    "cold": "out",
-}
-
-
 class DomainCreate(BaseModel):
     domain: str
-    stream: str = "optin"
-    subdomain_prefix: Optional[str] = None
 
-
-def generate_dns_records(full_domain: str, domain: str, dkim_selector: str = "postal") -> list[dict]:
-    return [
-        {
-            "record_type": "TXT",
-            "hostname": full_domain,
-            "value": f"v=spf1 include:spf.{full_domain} ~all",
-            "verified": False,
-        },
-        {
-            "record_type": "TXT",
-            "hostname": f"{dkim_selector}._domainkey.{full_domain}",
-            "value": "v=DKIM1; k=rsa; p=YOUR_DKIM_PUBLIC_KEY_HERE",
-            "verified": False,
-        },
-        {
-            "record_type": "TXT",
-            "hostname": f"_dmarc.{domain}",
-            "value": f"v=DMARC1; p=quarantine; rua=mailto:dmarc@{domain}; pct=100",
-            "verified": False,
-        },
-        {
-            "record_type": "MX",
-            "hostname": full_domain,
-            "value": f"mx.{full_domain}",
-            "priority": 10,
-            "verified": False,
-        },
-        {
-            "record_type": "A",
-            "hostname": full_domain,
-            "value": "YOUR_SERVER_IP",
-            "verified": False,
-        },
-        {
-            "record_type": "PTR",
-            "hostname": "YOUR_SERVER_IP",
-            "value": full_domain,
-            "verified": False,
-        },
-    ]
 
 
 @router.post("")
 async def add_domain(payload: DomainCreate, user: dict = Depends(get_current_user)):
     db = get_db()
 
-    prefix = payload.subdomain_prefix or STREAM_PREFIXES.get(payload.stream, "mail")
-    full_domain = f"{prefix}.{payload.domain}"
-
-    existing = await db.domains.find_one({"full_domain": full_domain})
+    domain = payload.domain.strip().lower()
+    existing = await db.domains.find_one({"domain": domain})
     if existing:
-        raise HTTPException(status_code=409, detail=f"Domain {full_domain} already exists")
-
-    dkim_selector = f"postal-{payload.stream}"
-    records = generate_dns_records(full_domain, payload.domain, dkim_selector)
+        raise HTTPException(status_code=409, detail=f"Domain {domain} already exists")
 
     doc = {
-        "domain": payload.domain,
-        "stream": payload.stream,
-        "subdomain": prefix,
-        "full_domain": full_domain,
+        "domain": domain,
+        "full_domain": domain,
         "status": "pending",
-        "dkim_selector": dkim_selector,
-        "dns_records": records,
         "ip_pool_id": None,
         "created_by": user["sub"],
         "verified_at": None,
@@ -97,10 +37,8 @@ async def add_domain(payload: DomainCreate, user: dict = Depends(get_current_use
     result = await db.domains.insert_one(doc)
     return {
         "id": str(result.inserted_id),
-        "full_domain": full_domain,
-        "stream": payload.stream,
-        "dns_records": records,
-        "message": "Add these DNS records at your domain provider (GoDaddy, etc.), then verify.",
+        "domain": domain,
+        "message": "Domain added. Configure DNS in Postal, then verify.",
     }
 
 

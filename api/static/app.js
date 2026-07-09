@@ -1146,8 +1146,7 @@ async function loadDomains() {
     document.getElementById('domains-tbody').innerHTML = d.domains.map(dm => {
         const statusClass = dm.status === 'verified' ? 'active' : dm.status === 'failed' ? 'suppressed' : 'draft';
         return `<tr>
-            <td><strong>${dm.full_domain}</strong><br><span class="text-muted">${dm.domain}</span></td>
-            <td><span class="badge ${dm.stream}">${dm.stream}</span></td>
+            <td><strong>${dm.full_domain || dm.domain}</strong></td>
             <td><span class="badge ${statusClass}">${dm.status}</span></td>
             <td>${dm.ip_pool_id ? '<span class="badge active">Assigned</span>' : '<span class="text-muted">None</span>'}</td>
             <td>
@@ -1161,15 +1160,12 @@ async function loadDomains() {
 
 async function addDomain() {
     const body = {
-        domain: document.getElementById('dom-domain').value,
-        stream: document.getElementById('dom-stream').value,
-        subdomain_prefix: document.getElementById('dom-prefix').value || undefined,
+        domain: document.getElementById('dom-domain').value.trim().toLowerCase(),
     };
     const d = await api('/domains', { method: 'POST', body: JSON.stringify(body) });
     closeModal('domain-modal');
-    toast(`Domain ${d.full_domain} added. Configure DNS records now.`);
+    toast(`Domain ${d.domain} added.`);
     loadDomains();
-    showDNSRecords(d.id);
 }
 
 async function showDNSRecords(domainId) {
