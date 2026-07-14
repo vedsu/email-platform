@@ -13,6 +13,7 @@ def send_message(
     html_body: str,
     text_body: str = None,
     tag: str = None,
+    ip_pool_id: int = None,
 ) -> dict:
     if not settings.postal_api_key:
         raise RuntimeError("POSTAL_API_KEY is not configured")
@@ -35,6 +36,8 @@ def send_message(
         payload["plain_body"] = text_body
     if tag:
         payload["tag"] = tag
+    if ip_pool_id:
+        payload["headers"]["X-IP-Pool-ID"] = str(ip_pool_id)
 
     response = httpx.post(
         f"{settings.postal_api_url}/api/v1/send/message",

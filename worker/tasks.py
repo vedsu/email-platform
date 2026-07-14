@@ -55,6 +55,9 @@ def send_to_recipient(self, campaign_id: str, contact_id: str, attempt: int = 1)
     email = contact["email"]
     stream = campaign.get("stream", contact.get("stream", "cold"))
 
+    STREAM_POOL = {"optin": 2, "engaged": 3, "cold": 4}
+    ip_pool_id = STREAM_POOL.get(stream)
+
     # 1. Suppression check
     if is_suppressed(email):
         logger.info(f"Skipping {email} — suppressed")
@@ -102,6 +105,7 @@ def send_to_recipient(self, campaign_id: str, contact_id: str, attempt: int = 1)
             html_body=html_body,
             text_body=text_body,
             tag=campaign_id,
+            ip_pool_id=ip_pool_id,
         )
     except Exception as exc:
         logger.error(f"Postal send failed for {email}: {exc}")
