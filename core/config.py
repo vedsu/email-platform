@@ -24,6 +24,9 @@ class Settings(BaseSettings):
 
     postal_api_url: str = "http://localhost:5000"
     postal_api_key: Optional[str] = None
+    postal_mariadb_root_password: str = ""
+    postal_mariadb_container: str = "ep-mariadb"
+    postal_message_db: str = "postal-server-1"
 
     stream_optin_domain: str = "mail.localhost"
     stream_engaged_domain: str = "eng.localhost"

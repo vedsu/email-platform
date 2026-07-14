@@ -1230,58 +1230,95 @@ async function deleteDomain(id) {
 }
 
 // --- IP Pools ---
+const POOL_COLORS = { optin: 'active', engaged: 'blue', cold: 'draft', inactive: 'suppressed', default: '' };
+
 async function loadIPPools() {
-    const [overview, pools, ips] = await Promise.all([api('/ip-pools/overview'), api('/ip-pools'), api('/ip-pools/ips')]);
+    const [postalData, crmData] = await Promise.all([
+        api('/ip-pools/postal-live'),
+        api('/ip-pools/crm-stats'),
+    ]);
+
+    const { pools = [], ips = [], delivery_stats: ds = {} } = postalData;
+    const streamStats = crmData.stats || {};
+
+    const totalSent7d = Object.values(streamStats).reduce((s, v) => s + (v.sent || 0), 0);
+    const totalQueued = ips.reduce((s, ip) => s + (ip.queued || 0), 0);
 
     document.getElementById('ip-stats').innerHTML = `
-        <div class="stat-card"><div class="label">Total IPs</div><div class="value blue">${overview.total_ips}</div></div>
-        <div class="stat-card"><div class="label">Total Pools</div><div class="value blue">${overview.total_pools}</div></div>
-        ${Object.entries(overview.by_status || {}).map(([s,c]) => `<div class="stat-card"><div class="label">${s}</div><div class="value">${c}</div></div>`).join('')}
+        <div class="stat-card"><div class="label">Sent (7 days)</div><div class="value blue">${totalSent7d.toLocaleString()}</div></div>
+        <div class="stat-card"><div class="label">Delivered (all time)</div><div class="value">${(ds.Sent||0).toLocaleString()}</div></div>
+        <div class="stat-card"><div class="label">Soft Fail</div><div class="value" style="color:#e67e22">${(ds.SoftFail||0).toLocaleString()}</div></div>
+        <div class="stat-card"><div class="label">Hard Fail</div><div class="value" style="color:#e74c3c">${(ds.HardFail||0).toLocaleString()}</div></div>
+        <div class="stat-card"><div class="label">Queued Now</div><div class="value">${totalQueued}</div></div>
     `;
 
-    document.getElementById('pools-tbody').innerHTML = pools.pools.map(p => `<tr>
-        <td><strong>${p.name}</strong><br><span class="text-muted">${p.description||''}</span></td>
-        <td><span class="badge ${p.stream}">${p.stream}</span></td>
-        <td>${p.ip_count || 0}</td>
-        <td>${(p.domain_ids||[]).length}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deletePool('${p._id}')">Del</button></td>
-    </tr>`).join('');
+    document.getElementById('postal-pools-tbody').innerHTML = pools.map(p => `<tr>
+        <td><span class="badge ${POOL_COLORS[p.name]||''}">${p.name}</span></td>
+        <td>${p.ips.map(ip => `<code style="font-size:11px">${ip}</code>`).join('<br>')}</td>
+        <td style="font-size:11px">${p.domains.map(d => `<code>${d}</code>`).join('<br>') || '<span class="text-muted">none</span>'}</td>
+        <td><strong>${p.queued}</strong></td>
+    </tr>`).join('') || '<tr><td colspan="4" class="text-muted">No pools found</td></tr>';
 
-    document.getElementById('ips-tbody').innerHTML = ips.ips.map(ip => `<tr>
-        <td><strong>${ip.ip}</strong></td>
-        <td><span class="badge">${ip.ip_type}</span></td>
-        <td><span class="badge ${ip.stream}">${ip.stream}</span></td>
-        <td><span class="badge ${ip.status === 'active' ? 'active' : ip.status === 'blocklisted' ? 'suppressed' : 'draft'}">${ip.status}</span></td>
-        <td>${ip.domain_name || '-'}</td>
-        <td>${ip.pool_name || '-'}</td>
-        <td>${ip.daily_cap}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deleteIP('${ip._id}')">Del</button></td>
-    </tr>`).join('');
+    document.getElementById('postal-ips-tbody').innerHTML = ips.map(ip => `<tr>
+        <td><strong><code>${ip.ipv4}</code></strong></td>
+        <td style="font-size:11px">${ip.hostname}</td>
+        <td><span class="badge ${POOL_COLORS[ip.pool_name]||''}">${ip.pool_name}</span></td>
+        <td><strong>${ip.queued}</strong></td>
+        <td>
+            <select style="font-size:11px;padding:2px 6px;border-radius:4px" onchange="moveIPToPool(${ip.id}, this.value, this)">
+                <option value="">move…</option>
+                ${pools.filter(p => p.id !== ip.pool_id).map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+            </select>
+        </td>
+    </tr>`).join('') || '<tr><td colspan="5" class="text-muted">No IPs found</td></tr>';
 
-    // Populate pool selector in IP modal
-    const poolSel = document.getElementById('ip-pool');
-    poolSel.innerHTML = '<option value="">None</option>' + pools.pools.map(p => `<option value="${p._id}">${p.name}</option>`).join('');
+    const streams = ['engaged', 'optin', 'cold', 'unknown'];
+    document.getElementById('stream-stats-tbody').innerHTML = streams
+        .filter(s => streamStats[s])
+        .map(s => {
+            const v = streamStats[s];
+            return `<tr>
+                <td><span class="badge ${POOL_COLORS[s]||'draft'}">${s}</span></td>
+                <td>${(v.sent||0).toLocaleString()}</td>
+                <td>${(v.delivered||0).toLocaleString()}</td>
+                <td>${(v.bounced||0).toLocaleString()}</td>
+                <td>${(v.opened||0).toLocaleString()}</td>
+                <td>${(v.clicked||0).toLocaleString()}</td>
+            </tr>`;
+        }).join('') || '<tr><td colspan="6" class="text-muted">No event data yet</td></tr>';
 }
 
-async function createPool() {
-    await api('/ip-pools', { method: 'POST', body: JSON.stringify({ name: document.getElementById('pool-name').value, stream: document.getElementById('pool-stream').value, description: document.getElementById('pool-desc').value }) });
-    closeModal('pool-modal'); toast('Pool created'); loadIPPools();
+async function moveIPToPool(ipId, poolId, sel) {
+    if (!poolId) return;
+    const r = await api(`/ip-pools/postal-ip/${ipId}/pool`, {
+        method: 'PUT', body: JSON.stringify({ pool_id: parseInt(poolId) })
+    });
+    toast(r.pool_name ? `Moved to ${r.pool_name} pool` : 'Pool updated');
+    sel.value = '';
+    loadIPPools();
 }
 
-async function addIP() {
-    await api('/ip-pools/ips', { method: 'POST', body: JSON.stringify({
-        ip: document.getElementById('ip-addr').value,
-        hostname: document.getElementById('ip-hostname').value,
-        ip_type: document.getElementById('ip-type').value,
-        stream: document.getElementById('ip-stream').value,
-        daily_cap: parseInt(document.getElementById('ip-cap').value) || 100,
-        pool_id: document.getElementById('ip-pool').value || undefined,
-    })});
-    closeModal('ip-modal'); toast('IP added'); loadIPPools();
+async function loadPostalErrors() {
+    document.getElementById('postal-errors-content').innerHTML = '<p class="text-muted">Loading…</p>';
+    const d = await api('/ip-pools/postal-errors?limit=100');
+    const errors = d.errors || [];
+    if (!errors.length) {
+        document.getElementById('postal-errors-content').innerHTML = '<p class="text-muted">No recent errors.</p>';
+        return;
+    }
+    const sc = { SoftFail: 'draft', HardFail: 'suppressed', Bounced: 'suppressed' };
+    document.getElementById('postal-errors-content').innerHTML = `
+        <div style="overflow-x:auto">
+        <table><thead><tr><th>Time (UTC)</th><th>Status</th><th>From</th><th>To</th><th>Error</th></tr></thead>
+        <tbody>${errors.map(e => `<tr>
+            <td style="white-space:nowrap;font-size:11px">${(e.sent_at||'').replace('.000000','')}</td>
+            <td><span class="badge ${sc[e.status]||'draft'}">${e.status}</span></td>
+            <td style="font-size:11px">${e.mail_from||''}</td>
+            <td style="font-size:11px">${e.rcpt_to||''}</td>
+            <td style="font-size:11px;max-width:340px" title="${(e.output||'').replace(/"/g,'&quot;')}">${e.output||''}</td>
+        </tr>`).join('')}</tbody>
+        </table></div>`;
 }
-
-async function deletePool(id) { if (!confirm('Delete this pool?')) return; await api('/ip-pools/' + id, {method:'DELETE'}); toast('Pool deleted'); loadIPPools(); }
-async function deleteIP(id) { if (!confirm('Delete this IP?')) return; await api('/ip-pools/ips/' + id, {method:'DELETE'}); toast('IP deleted'); loadIPPools(); }
 
 // --- Admin ---
 async function loadAdmin() {

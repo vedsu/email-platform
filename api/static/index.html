@@ -454,10 +454,35 @@
 
             <!-- IP Pools -->
             <div id="page-ippools" class="page">
-                <div class="card-header"><h2>IP Pools & Addresses</h2><div class="btn-row"><button class="btn btn-primary" onclick="openModal('pool-modal')">Create Pool</button><button class="btn btn-success" onclick="openModal('ip-modal')">Add IP</button></div></div>
+                <div class="card-header"><h2>IP Pools &amp; Sending</h2><button class="btn btn-secondary" onclick="loadIPPools()">↻ Refresh</button></div>
                 <div class="stats-grid" id="ip-stats"></div>
-                <div class="card"><h2>Pools</h2><table><thead><tr><th>Name</th><th>Stream</th><th>IPs</th><th>Domains</th><th>Actions</th></tr></thead><tbody id="pools-tbody"></tbody></table></div>
-                <div class="card"><h2>IP Addresses</h2><table><thead><tr><th>IP</th><th>Type</th><th>Stream</th><th>Status</th><th>Domain</th><th>Pool</th><th>Daily Cap</th><th>Actions</th></tr></thead><tbody id="ips-tbody"></tbody></table></div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+                    <div class="card" style="margin:0">
+                        <h2>Postal Pools</h2>
+                        <table><thead><tr><th>Pool</th><th>IPs</th><th>Routing Domains</th><th>Queued</th></tr></thead>
+                        <tbody id="postal-pools-tbody"></tbody></table>
+                    </div>
+                    <div class="card" style="margin:0">
+                        <h2>IP Addresses</h2>
+                        <table><thead><tr><th>IP</th><th>Hostname</th><th>Pool</th><th>Queued</th><th>Move</th></tr></thead>
+                        <tbody id="postal-ips-tbody"></tbody></table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>CRM Send Stats <span class="text-muted" style="font-weight:normal;font-size:13px">— last 7 days</span></h2>
+                    <table><thead><tr><th>Stream</th><th>Sent</th><th>Delivered</th><th>Bounced</th><th>Opens</th><th>Clicks</th></tr></thead>
+                    <tbody id="stream-stats-tbody"></tbody></table>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" style="padding:0 0 12px">
+                        <h2>Postal Error Log</h2>
+                        <button class="btn btn-secondary btn-sm" onclick="loadPostalErrors()">↻ Load errors</button>
+                    </div>
+                    <div id="postal-errors-content"><p class="text-muted">Click "Load errors" to fetch recent delivery failures.</p></div>
+                </div>
             </div>
 
             <!-- Admin System -->
@@ -586,21 +611,6 @@
         <div class="btn-row"><button class="btn btn-primary" onclick="addDomain()">Add Domain</button><button class="btn btn-secondary" onclick="closeModal('domain-modal')">Cancel</button></div>
     </div></div>
 
-    <div class="modal-overlay" id="pool-modal"><div class="modal"><h2>Create IP Pool</h2>
-        <div class="form-group"><label>Name</label><input id="pool-name" placeholder="e.g. Optin Pool"></div>
-        <div class="form-group"><label>Stream</label><select id="pool-stream"><option value="optin">Opt-in</option><option value="engaged">Engaged</option><option value="cold">Cold</option></select></div>
-        <div class="form-group"><label>Description</label><input id="pool-desc" placeholder="Optional"></div>
-        <div class="btn-row"><button class="btn btn-primary" onclick="createPool()">Create</button><button class="btn btn-secondary" onclick="closeModal('pool-modal')">Cancel</button></div>
-    </div></div>
-
-    <div class="modal-overlay" id="ip-modal"><div class="modal"><h2>Add IP Address</h2>
-        <div class="form-group"><label>IP Address</label><input id="ip-addr" placeholder="192.168.1.1"></div>
-        <div class="form-group"><label>Hostname</label><input id="ip-hostname" placeholder="mail.yourdomain.com"></div>
-        <div class="form-row"><div class="form-group"><label>Type</label><select id="ip-type"><option value="dedicated">Dedicated</option><option value="shared">Shared</option></select></div><div class="form-group"><label>Stream</label><select id="ip-stream"><option value="optin">Opt-in</option><option value="engaged">Engaged</option><option value="cold">Cold</option></select></div></div>
-        <div class="form-group"><label>Daily Cap</label><input id="ip-cap" type="number" value="100"></div>
-        <div class="form-group"><label>Assign to Pool</label><select id="ip-pool"><option value="">None</option></select></div>
-        <div class="btn-row"><button class="btn btn-primary" onclick="addIP()">Add IP</button><button class="btn btn-secondary" onclick="closeModal('ip-modal')">Cancel</button></div>
-    </div></div>
 
     <div class="modal-overlay" id="sup-bulk-modal"><div class="modal"><h2>Bulk Suppress — CSV Upload</h2>
         <p class="text-muted mb-2">Upload a CSV with an <strong>email</strong> column. All emails will be suppressed.</p>
