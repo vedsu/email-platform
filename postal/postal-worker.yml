@@ -7,21 +7,21 @@ postal:
   smtp_hostname: smtp2.vedsupost.com
 
 main_db:
-  host: mariadb
+  host: 172.18.0.3
   port: 3306
   username: root
   password: Pr0d_M@r1aDB_2026!
   database: postal
 
 message_db:
-  host: mariadb
+  host: 172.18.0.3
   port: 3306
   username: root
   password: Pr0d_M@r1aDB_2026!
   prefix: postal
 
 rabbitmq:
-  host: rabbitmq
+  host: 172.18.0.5
   port: 5672
   username: postal
   password: postal_pass

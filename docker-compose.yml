@@ -80,10 +80,11 @@ services:
     image: ghcr.io/postalserver/postal:latest
     container_name: ep-postal-worker
     command: postal worker
+    network_mode: host
     depends_on:
       - postal
     volumes:
-      - ./postal/postal.yml:/config/postal.yml
+      - ./postal/postal-worker.yml:/config/postal.yml
       - ./postal/signing.key:/config/signing.key
     restart: unless-stopped
 
