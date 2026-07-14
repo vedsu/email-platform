@@ -125,6 +125,38 @@ async def verify_domain(domain_id: str, user: dict = Depends(get_current_user)):
     }
 
 
+POSTAL_POOL_IDS = {"optin": 2, "engaged": 3, "cold": 4, "inactive": 5}
+
+
+class PoolAssign(BaseModel):
+    pool: str
+
+
+@router.put("/{domain_id}/pool")
+async def assign_domain_pool(domain_id: str, payload: PoolAssign, user: dict = Depends(get_current_user)):
+    db = get_db()
+    pool_name = payload.pool.lower()
+    if pool_name not in POSTAL_POOL_IDS:
+        raise HTTPException(status_code=400, detail=f"Invalid pool. Choose from: {', '.join(POSTAL_POOL_IDS)}")
+    doc = await db.domains.find_one({"_id": ObjectId(domain_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    postal_pool_id = POSTAL_POOL_IDS[pool_name]
+    await db.domains.update_one(
+        {"_id": ObjectId(domain_id)},
+        {"$set": {"pool": pool_name, "ip_pool_id": postal_pool_id, "updated_at": datetime.utcnow()}},
+    )
+    domain = doc["domain"]
+    sql = (
+        f"-- Run in Postal MariaDB to update routing:\n"
+        f"UPDATE ip_pool_rules SET ip_pool_id = {postal_pool_id} WHERE from_text = '@{domain}';\n"
+        f"-- If no rule exists yet:\n"
+        f"INSERT IGNORE INTO ip_pool_rules (uuid, owner_type, owner_id, ip_pool_id, from_text, to_text, created_at, updated_at) "
+        f"VALUES (UUID(), 'Server', 1, {postal_pool_id}, '@{domain}', NULL, NOW(), NOW());"
+    )
+    return {"updated": True, "pool": pool_name, "postal_pool_id": postal_pool_id, "postal_sql": sql}
+
+
 @router.delete("/{domain_id}")
 async def delete_domain(domain_id: str, admin: dict = Depends(require_admin)):
     db = get_db()

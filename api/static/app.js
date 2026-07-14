@@ -1152,10 +1152,20 @@ async function loadDomains() {
     const d = await api('/domains');
     document.getElementById('domains-tbody').innerHTML = d.domains.map(dm => {
         const statusClass = dm.status === 'verified' ? 'active' : dm.status === 'failed' ? 'suppressed' : 'draft';
+        const poolColors = { optin: 'active', engaged: 'blue', cold: 'draft', inactive: 'suppressed' };
+        const pool = dm.pool || '';
+        const poolBadge = pool
+            ? `<select class="badge ${poolColors[pool] || 'draft'}" style="border:none;cursor:pointer;font-size:11px" onchange="changeDomainPool('${dm._id}', this.value, '${dm.domain}')">
+                ${['optin','engaged','cold','inactive'].map(p => `<option value="${p}" ${p===pool?'selected':''}>${p}</option>`).join('')}
+               </select>`
+            : `<select class="badge draft" style="border:none;cursor:pointer;font-size:11px" onchange="changeDomainPool('${dm._id}', this.value, '${dm.domain}')">
+                <option value="">— assign —</option>
+                ${['optin','engaged','cold','inactive'].map(p => `<option value="${p}">${p}</option>`).join('')}
+               </select>`;
         return `<tr>
             <td><strong>${dm.full_domain || dm.domain}</strong></td>
             <td><span class="badge ${statusClass}">${dm.status}</span></td>
-            <td>${dm.ip_pool_id ? '<span class="badge active">Assigned</span>' : '<span class="text-muted">None</span>'}</td>
+            <td>${poolBadge}</td>
             <td>
                 <button class="btn btn-secondary btn-sm" onclick="showDNSRecords('${dm._id}')">DNS Records</button>
                 <button class="btn btn-primary btn-sm" onclick="verifyDomain('${dm._id}')">Verify</button>
@@ -1163,6 +1173,20 @@ async function loadDomains() {
             </td>
         </tr>`;
     }).join('');
+}
+
+async function changeDomainPool(domainId, pool, domainName) {
+    if (!pool) return;
+    const r = await api(`/domains/${domainId}/pool`, { method: 'PUT', body: JSON.stringify({ pool }) });
+    toast(`${domainName} → ${r.pool} pool`);
+    if (r.postal_sql) {
+        document.getElementById('dns-records-panel').classList.remove('hidden');
+        document.getElementById('dns-records-content').innerHTML = `
+            <p class="mb-2"><strong>${domainName}</strong> pool updated to <strong>${r.pool}</strong>. Run this in Postal MariaDB to apply routing:</p>
+            <pre style="background:var(--bg-secondary);padding:12px;border-radius:6px;overflow-x:auto;font-size:12px">${r.postal_sql}</pre>
+            <p class="text-muted" style="font-size:12px">docker exec -it ep-mariadb mariadb -u root -p'Pr0d_M@r1aDB_2026!' postal</p>`;
+    }
+    loadDomains();
 }
 
 async function addDomain() {
