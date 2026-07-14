@@ -38,15 +38,18 @@ async def postal_webhook(request: Request):
         return {"status": "ignored", "event": event_type}
 
     postal_payload = payload.get("payload", {})
-    message = postal_payload.get("message", {})
-    # Postal puts recipient in rcpt_to for most events but falls back to "to" on bounces
+    # MessageBounced uses original_message; all other events use message
+    if event_type == "MessageBounced":
+        message = postal_payload.get("original_message", {})
+    else:
+        message = postal_payload.get("message", {})
     rcpt_to = (
         message.get("rcpt_to")
         or message.get("to")
         or postal_payload.get("rcpt_to")
         or ""
     ).strip().lower()
-    postal_message_id = message.get("id")  # store as integer to match sent events
+    postal_message_id = message.get("id")
     tag = _extract_tag(message.get("tag", ""))
 
     db = get_db()
@@ -74,6 +77,9 @@ async def postal_webhook(request: Request):
         "bounce_message": bounce_message,
         "click_url": click_url,
         "postal_message_id": postal_message_id,
+        "sending_ip": None,
+        "ip_pool_id": None,
+        "ip_pool_name": None,
         "metadata": {"raw_event": event_type},
         "created_at": datetime.utcnow(),
     }
@@ -82,6 +88,17 @@ async def postal_webhook(request: Request):
     if contact:
         event_doc["contact_id"] = str(contact["_id"])
         event_doc["stream"] = contact.get("stream", "")
+
+    # For bounce events, pull the IP that originally sent the message
+    if mapped_type == "bounced" and postal_message_id:
+        sent_event = await db.events.find_one(
+            {"postal_message_id": postal_message_id, "event_type": "sent"},
+            {"sending_ip": 1, "ip_pool_id": 1, "ip_pool_name": 1},
+        )
+        if sent_event:
+            event_doc["sending_ip"] = sent_event.get("sending_ip")
+            event_doc["ip_pool_id"] = sent_event.get("ip_pool_id")
+            event_doc["ip_pool_name"] = sent_event.get("ip_pool_name")
 
     await db.events.insert_one(event_doc)
 

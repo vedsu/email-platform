@@ -152,6 +152,15 @@ def send_to_recipient(self, campaign_id: str, contact_id: str, attempt: int = 1)
 
     postal_message_id = result.get("data", {}).get("messages", {}).get(email, {}).get("id")
 
+    # Capture sending IP while queued_message still exists (Postal worker polls every 5s)
+    sending_ip = None
+    if postal_message_id:
+        try:
+            from core.postal_mariadb import get_sending_ip_for_message
+            sending_ip = get_sending_ip_for_message(postal_message_id)
+        except Exception as e:
+            logger.debug(f"Could not fetch sending IP for msg {postal_message_id}: {e}")
+
     # 6. Increment counters
     increment_send_count(stream)
     increment_domain_count(email)
@@ -164,6 +173,9 @@ def send_to_recipient(self, campaign_id: str, contact_id: str, attempt: int = 1)
         "event_type": "sent",
         "stream": stream,
         "postal_message_id": postal_message_id,
+        "ip_pool_id": ip_pool_id,
+        "ip_pool_name": stream,
+        "sending_ip": sending_ip,
         "metadata": {},
         "created_at": now,
     })

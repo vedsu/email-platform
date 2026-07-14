@@ -1233,9 +1233,10 @@ async function deleteDomain(id) {
 const POOL_COLORS = { optin: 'active', engaged: 'blue', cold: 'draft', inactive: 'suppressed', default: '' };
 
 async function loadIPPools() {
-    const [postalData, crmData] = await Promise.all([
+    const [postalData, crmData, bounceData] = await Promise.all([
         api('/ip-pools/postal-live'),
         api('/ip-pools/crm-stats'),
+        api('/ip-pools/ip-bounce-stats').catch(() => ({ by_ip: [] })),
     ]);
 
     const { pools = [], ips = [], delivery_stats: ds = {} } = postalData;
@@ -1287,6 +1288,22 @@ async function loadIPPools() {
             </td>
         </tr>`;
     }).join('') || '<tr><td colspan="7" class="text-muted">No IPs found</td></tr>';
+
+    // Per-IP hard bounce breakdown
+    const byIp = bounceData.by_ip || [];
+    document.getElementById('ip-bounce-tbody').innerHTML = byIp.length ? byIp.map(row => {
+        const ip = row.sending_ip || '<span class="text-muted">unknown</span>';
+        const pool = row.ip_pool_name || '—';
+        const rateColor = (row.bounce_rate || 0) > 10 ? '#e74c3c' : (row.bounce_rate || 0) > 5 ? '#e67e22' : '#27ae60';
+        const rate = row.bounce_rate != null ? `<strong style="color:${rateColor}">${row.bounce_rate}%</strong>` : '—';
+        return `<tr>
+            <td><code>${ip}</code></td>
+            <td><span class="badge ${POOL_COLORS[pool]||''}">${pool}</span></td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums">${row.sent ? row.sent.toLocaleString() : '—'}</td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums">${row.hard_bounces.toLocaleString()}</td>
+            <td style="text-align:right">${rate}</td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="5" class="text-muted">No per-IP data yet — data populates as new campaigns send</td></tr>';
 }
 
 async function moveIPToPool(ipId, poolId, sel) {

@@ -1,7 +1,5 @@
 import asyncio
-import subprocess
 from datetime import datetime, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -9,31 +7,11 @@ from pydantic import BaseModel
 from models.database import get_db
 from core.auth import get_current_user
 from core.config import settings
+from core.postal_mariadb import postal_sql as _postal_sql
 
 router = APIRouter(prefix="/ip-pools", tags=["ip-pools"])
 
 POOL_NAMES = ["optin", "engaged", "cold", "inactive", "default"]
-
-
-# ---------------------------------------------------------------------------
-# Postal MariaDB helper (docker exec — port not exposed to host)
-# ---------------------------------------------------------------------------
-
-def _postal_sql(sql: str, db: str = "postal") -> list[list[str]]:
-    cmd = [
-        "docker", "exec", settings.postal_mariadb_container,
-        "mariadb", "-u", "root",
-        f"-p{settings.postal_mariadb_root_password}",
-        db, "--skip-column-names", "--batch", "-e", sql,
-    ]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-    if r.returncode != 0:
-        raise RuntimeError(r.stderr.strip()[:300] or "MariaDB error")
-    rows = []
-    for line in r.stdout.strip().split("\n"):
-        if line:
-            rows.append(line.split("\t"))
-    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -199,3 +177,56 @@ async def ip_overview(user: dict = Depends(get_current_user)):
         }
 
     return await asyncio.to_thread(_fetch)
+
+
+# ---------------------------------------------------------------------------
+# Per-IP hard bounce breakdown (CRM events, requires sending_ip in events)
+# ---------------------------------------------------------------------------
+
+@router.get("/ip-bounce-stats")
+async def ip_bounce_stats(days: int = 7, user: dict = Depends(get_current_user)):
+    """Hard bounce and sent counts grouped by sending_ip (last N days)."""
+    db = get_db()
+    since = datetime.utcnow() - timedelta(days=days)
+
+    bounce_pipeline = [
+        {"$match": {"event_type": "bounced", "bounce_type": "hard", "created_at": {"$gte": since}}},
+        {"$group": {
+            "_id": {
+                "sending_ip": {"$ifNull": ["$sending_ip", "__unknown__"]},
+                "ip_pool_name": {"$ifNull": ["$ip_pool_name", ""]},
+                "ip_pool_id": {"$ifNull": ["$ip_pool_id", None]},
+            },
+            "hard_bounces": {"$sum": 1},
+        }},
+        {"$sort": {"hard_bounces": -1}},
+    ]
+
+    bounces_by_ip = []
+    async for doc in db.events.aggregate(bounce_pipeline):
+        ip = doc["_id"]["sending_ip"]
+        bounces_by_ip.append({
+            "sending_ip": None if ip == "__unknown__" else ip,
+            "ip_pool_name": doc["_id"]["ip_pool_name"] or None,
+            "ip_pool_id": doc["_id"]["ip_pool_id"],
+            "hard_bounces": doc["hard_bounces"],
+        })
+
+    sent_pipeline = [
+        {"$match": {"event_type": "sent", "created_at": {"$gte": since}}},
+        {"$group": {
+            "_id": {"$ifNull": ["$sending_ip", "__unknown__"]},
+            "sent": {"$sum": 1},
+        }},
+    ]
+    sent_by_ip: dict[str, int] = {}
+    async for doc in db.events.aggregate(sent_pipeline):
+        sent_by_ip[doc["_id"]] = doc["sent"]
+
+    for item in bounces_by_ip:
+        key = item["sending_ip"] or "__unknown__"
+        sent = sent_by_ip.get(key, 0)
+        item["sent"] = sent
+        item["bounce_rate"] = round(item["hard_bounces"] / sent * 100, 2) if sent else None
+
+    return {"by_ip": bounces_by_ip, "since": since.isoformat(), "days": days}
