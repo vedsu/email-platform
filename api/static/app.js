@@ -1241,6 +1241,10 @@ async function loadIPPools() {
     const { pools = [], ips = [], delivery_stats: ds = {} } = postalData;
     const streamStats = crmData.stats || {};
 
+    // Map pool name → stream stats (pool name matches stream name for optin/engaged/cold)
+    const poolStats = {};
+    pools.forEach(p => { poolStats[p.name] = streamStats[p.name] || {}; });
+
     const totalSent7d = Object.values(streamStats).reduce((s, v) => s + (v.sent || 0), 0);
     const totalQueued = ips.reduce((s, ip) => s + (ip.queued || 0), 0);
 
@@ -1252,40 +1256,37 @@ async function loadIPPools() {
         <div class="stat-card"><div class="label">Queued Now</div><div class="value">${totalQueued}</div></div>
     `;
 
+    // Pools summary
     document.getElementById('postal-pools-tbody').innerHTML = pools.map(p => `<tr>
         <td><span class="badge ${POOL_COLORS[p.name]||''}">${p.name}</span></td>
-        <td>${p.ips.map(ip => `<code style="font-size:11px">${ip}</code>`).join('<br>')}</td>
-        <td style="font-size:11px">${p.domains.map(d => `<code>${d}</code>`).join('<br>') || '<span class="text-muted">none</span>'}</td>
+        <td>${p.ips.map(ip => `<code style="font-size:11px">${ip}</code>`).join('<br>') || '<span class="text-muted">—</span>'}</td>
+        <td style="font-size:11px">${p.domains.map(d => `<code>${d}</code>`).join('<br>') || '<span class="text-muted">none (uses X-IP-Pool-ID)</span>'}</td>
         <td><strong>${p.queued}</strong></td>
     </tr>`).join('') || '<tr><td colspan="4" class="text-muted">No pools found</td></tr>';
 
-    document.getElementById('postal-ips-tbody').innerHTML = ips.map(ip => `<tr>
-        <td><strong><code>${ip.ipv4}</code></strong></td>
-        <td style="font-size:11px">${ip.hostname}</td>
-        <td><span class="badge ${POOL_COLORS[ip.pool_name]||''}">${ip.pool_name}</span></td>
-        <td><strong>${ip.queued}</strong></td>
-        <td>
-            <select style="font-size:11px;padding:2px 6px;border-radius:4px" onchange="moveIPToPool(${ip.id}, this.value, this)">
-                <option value="">move…</option>
-                ${pools.filter(p => p.id !== ip.pool_id).map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-            </select>
-        </td>
-    </tr>`).join('') || '<tr><td colspan="5" class="text-muted">No IPs found</td></tr>';
-
-    const streams = ['engaged', 'optin', 'cold', 'unknown'];
-    document.getElementById('stream-stats-tbody').innerHTML = streams
-        .filter(s => streamStats[s])
-        .map(s => {
-            const v = streamStats[s];
-            return `<tr>
-                <td><span class="badge ${POOL_COLORS[s]||'draft'}">${s}</span></td>
-                <td>${(v.sent||0).toLocaleString()}</td>
-                <td>${(v.delivered||0).toLocaleString()}</td>
-                <td>${(v.bounced||0).toLocaleString()}</td>
-                <td>${(v.opened||0).toLocaleString()}</td>
-                <td>${(v.clicked||0).toLocaleString()}</td>
-            </tr>`;
-        }).join('') || '<tr><td colspan="6" class="text-muted">No event data yet</td></tr>';
+    // IP addresses with per-IP queue + pool-level CRM stats
+    document.getElementById('postal-ips-tbody').innerHTML = ips.map(ip => {
+        const ps = poolStats[ip.pool_name] || {};
+        const sent = ps.sent || 0;
+        const bounced = ps.bounced || 0;
+        const opened = ps.opened || 0;
+        const ipCount = pools.find(p => p.name === ip.pool_name)?.ips.length || 1;
+        const poolLabel = ipCount > 1 ? `<span class="text-muted" style="font-size:10px">(pool total, ${ipCount} IPs share)</span>` : '';
+        return `<tr>
+            <td><strong><code>${ip.ipv4}</code></strong><br><span class="text-muted" style="font-size:10px">${ip.hostname}</span></td>
+            <td><span class="badge ${POOL_COLORS[ip.pool_name]||''}">${ip.pool_name}</span></td>
+            <td style="text-align:center"><strong>${ip.queued}</strong></td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums">${sent ? sent.toLocaleString() : '—'} ${poolLabel}</td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums">${bounced ? bounced.toLocaleString() : '—'}</td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums">${opened ? opened.toLocaleString() : '—'}</td>
+            <td>
+                <select style="font-size:11px;padding:2px 6px;border-radius:4px" onchange="moveIPToPool(${ip.id}, this.value, this)">
+                    <option value="">move…</option>
+                    ${pools.filter(p => p.id !== ip.pool_id).map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                </select>
+            </td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="7" class="text-muted">No IPs found</td></tr>';
 }
 
 async function moveIPToPool(ipId, poolId, sel) {
@@ -1296,28 +1297,6 @@ async function moveIPToPool(ipId, poolId, sel) {
     toast(r.pool_name ? `Moved to ${r.pool_name} pool` : 'Pool updated');
     sel.value = '';
     loadIPPools();
-}
-
-async function loadPostalErrors() {
-    document.getElementById('postal-errors-content').innerHTML = '<p class="text-muted">Loading…</p>';
-    const d = await api('/ip-pools/postal-errors?limit=100');
-    const errors = d.errors || [];
-    if (!errors.length) {
-        document.getElementById('postal-errors-content').innerHTML = '<p class="text-muted">No recent errors.</p>';
-        return;
-    }
-    const sc = { SoftFail: 'draft', HardFail: 'suppressed', Bounced: 'suppressed' };
-    document.getElementById('postal-errors-content').innerHTML = `
-        <div style="overflow-x:auto">
-        <table><thead><tr><th>Time (UTC)</th><th>Status</th><th>From</th><th>To</th><th>Error</th></tr></thead>
-        <tbody>${errors.map(e => `<tr>
-            <td style="white-space:nowrap;font-size:11px">${(e.sent_at||'').replace('.000000','')}</td>
-            <td><span class="badge ${sc[e.status]||'draft'}">${e.status}</span></td>
-            <td style="font-size:11px">${e.mail_from||''}</td>
-            <td style="font-size:11px">${e.rcpt_to||''}</td>
-            <td style="font-size:11px;max-width:340px" title="${(e.output||'').replace(/"/g,'&quot;')}">${e.output||''}</td>
-        </tr>`).join('')}</tbody>
-        </table></div>`;
 }
 
 // --- Admin ---

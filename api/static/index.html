@@ -457,31 +457,16 @@
                 <div class="card-header"><h2>IP Pools &amp; Sending</h2><button class="btn btn-secondary" onclick="loadIPPools()">↻ Refresh</button></div>
                 <div class="stats-grid" id="ip-stats"></div>
 
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-                    <div class="card" style="margin:0">
-                        <h2>Postal Pools</h2>
-                        <table><thead><tr><th>Pool</th><th>IPs</th><th>Routing Domains</th><th>Queued</th></tr></thead>
-                        <tbody id="postal-pools-tbody"></tbody></table>
-                    </div>
-                    <div class="card" style="margin:0">
-                        <h2>IP Addresses</h2>
-                        <table><thead><tr><th>IP</th><th>Hostname</th><th>Pool</th><th>Queued</th><th>Move</th></tr></thead>
-                        <tbody id="postal-ips-tbody"></tbody></table>
-                    </div>
+                <div class="card">
+                    <h2>Pools</h2>
+                    <table><thead><tr><th>Pool</th><th>IPs</th><th>Domain Rules <span style="font-weight:normal;font-size:11px">(fallback — stream header used per campaign)</span></th><th>Queued</th></tr></thead>
+                    <tbody id="postal-pools-tbody"></tbody></table>
                 </div>
 
                 <div class="card">
-                    <h2>CRM Send Stats <span class="text-muted" style="font-weight:normal;font-size:13px">— last 7 days</span></h2>
-                    <table><thead><tr><th>Stream</th><th>Sent</th><th>Delivered</th><th>Bounced</th><th>Opens</th><th>Clicks</th></tr></thead>
-                    <tbody id="stream-stats-tbody"></tbody></table>
-                </div>
-
-                <div class="card">
-                    <div class="card-header" style="padding:0 0 12px">
-                        <h2>Postal Error Log</h2>
-                        <button class="btn btn-secondary btn-sm" onclick="loadPostalErrors()">↻ Load errors</button>
-                    </div>
-                    <div id="postal-errors-content"><p class="text-muted">Click "Load errors" to fetch recent delivery failures.</p></div>
+                    <h2>IP Addresses <span class="text-muted" style="font-weight:normal;font-size:13px">— queue is live · sent/bounced/opens are pool totals (7 days)</span></h2>
+                    <table><thead><tr><th>IP / Hostname</th><th>Pool</th><th style="text-align:center">Queued</th><th style="text-align:right">Sent (7d)</th><th style="text-align:right">Bounced</th><th style="text-align:right">Opens</th><th>Move</th></tr></thead>
+                    <tbody id="postal-ips-tbody"></tbody></table>
                 </div>
             </div>
 
